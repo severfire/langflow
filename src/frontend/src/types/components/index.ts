@@ -323,6 +323,7 @@ export type TriggerProps = {
   children: ReactNode;
   tooltipContent?: ReactNode;
   side?: "top" | "right" | "bottom" | "left";
+  disabled?: boolean;
 };
 
 export interface languageMap {
@@ -367,6 +368,7 @@ export type ConfirmationModalType = {
   icon?: string;
   data?: any;
   index?: number;
+  disabled?: boolean;
   onConfirm?: (index, data) => void;
   open?: boolean;
   onClose?: () => void;
@@ -412,6 +414,7 @@ export type UserInputType = {
   username: string;
   password: string;
   is_active?: boolean;
+  is_creatoruser?: boolean;
   is_superuser?: boolean;
   id?: string;
   create_at?: string;

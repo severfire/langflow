@@ -7,6 +7,7 @@ import { create } from "zustand";
 const cookies = new Cookies();
 const useAuthStore = create<AuthStoreType>((set, get) => ({
   isAdmin: false,
+  isCreator: false,
   isAuthenticated: !!cookies.get(LANGFLOW_ACCESS_TOKEN),
   accessToken: cookies.get(LANGFLOW_ACCESS_TOKEN) ?? null,
   userData: null,
@@ -15,6 +16,7 @@ const useAuthStore = create<AuthStoreType>((set, get) => ({
   authenticationErrorCount: 0,
 
   setIsAdmin: (isAdmin) => set({ isAdmin }),
+  setIsCreator: (isCreator) => set({ isCreator }),
   setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setAccessToken: (accessToken) => set({ accessToken }),
   setUserData: (userData) => set({ userData }),

@@ -65,7 +65,9 @@ export function AuthProvider({ children }): React.ReactElement {
         onSuccess: async (user) => {
           setUserData(user);
           const isSuperUser = user!.is_superuser;
+          const isCreatorUser = user!.is_creatoruser;
           useAuthStore.getState().setIsAdmin(isSuperUser);
+          useAuthStore.getState().setIsCreator(isCreatorUser);
           checkHasStore();
           fetchApiData();
         },

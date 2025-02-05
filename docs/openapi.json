@@ -8301,6 +8301,10 @@
                         "type": "boolean",
                         "title": "Is Superuser"
                     },
+                    "is_creatoruser": {
+                        "type": "boolean",
+                        "title": "Is Creatoruser"
+                    },
                     "create_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8329,6 +8333,7 @@
                     "store_api_key",
                     "is_active",
                     "is_superuser",
+                    "is_creatoruser",
                     "create_at",
                     "updated_at",
                     "last_login_at"
@@ -8382,6 +8387,16 @@
                         "title": "Is Superuser",
                         "nullable": true
                     },
+                    "is_creatoruser": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            }
+                        ],
+                        "title": "Is Creatoruser",
+                        "nullable": true
+                    },
+
                     "last_login_at": {
                         "anyOf": [
                             {

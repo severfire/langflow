@@ -134,6 +134,7 @@ The following table lists the environment variables supported by Langflow.
 | <Link id="LANGFLOW_MCP_SERVER_ENABLED"/>`LANGFLOW_MCP_SERVER_ENABLED` | Boolean | `true` | If set to False, Langflow will not enable the MCP server. |
 | <Link id="LANGFLOW_MCP_SERVER_ENABLE_PROGRESS_NOTIFICATIONS"/>`LANGFLOW_MCP_SERVER_ENABLE_PROGRESS_NOTIFICATIONS` | Boolean | `false` | If set to True, Langflow will send progress notifications in the MCP server. |
 | <Link id="LANGFLOW_NEW_USER_IS_ACTIVE"/>`LANGFLOW_NEW_USER_IS_ACTIVE` | Boolean | `false` | When enabled, new users are automatically activated and can log in without requiring explicit activation by the superuser. |
+| <Link id="LANGFLOW_NEW_USER_IS_CREATOR"/>`LANGFLOW_NEW_USER_IS_CREATOR` | Boolean | `false` | When enabled, new users are automatically given creator privileges. |
 | <Link id="LANGFLOW_OPEN_BROWSER"/>`LANGFLOW_OPEN_BROWSER` | Boolean | `false` | Open the system web browser on startup.<br/>See [`--open-browser` option](./configuration-cli.md#run-open-browser). |
 | <Link id="LANGFLOW_PORT"/>`LANGFLOW_PORT` | Integer | `7860` | The port on which the Langflow server will run. The server automatically selects a free port if the specified port is in use.<br/>See [`--port` option](./configuration-cli.md#run-port). |
 | <Link id="LANGFLOW_PROMETHEUS_ENABLED"/>`LANGFLOW_PROMETHEUS_ENABLED` | Boolean | `false` | Expose Prometheus metrics. |

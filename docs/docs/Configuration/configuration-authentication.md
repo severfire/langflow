@@ -22,6 +22,7 @@ LANGFLOW_SUPERUSER=admin
 LANGFLOW_SUPERUSER_PASSWORD=securepassword
 LANGFLOW_SECRET_KEY=randomly_generated_secure_key
 LANGFLOW_NEW_USER_IS_ACTIVE=False
+LANGFLOW_NEW_USER_IS_CREATOR=False
 ```
 
 For more information, see [Authentication configuration values](#values).
@@ -74,13 +75,14 @@ Superuser created successfully.
 
 The following table lists the available authentication configuration variables, their descriptions, and default values:
 
-| Variable                      | Description                           | Default |
-| ----------------------------- | ------------------------------------- | ------- |
-| `LANGFLOW_AUTO_LOGIN`         | Enables automatic login               | `True`  |
-| `LANGFLOW_SUPERUSER`          | Superuser username                    | -       |
-| `LANGFLOW_SUPERUSER_PASSWORD` | Superuser password                    | -       |
-| `LANGFLOW_SECRET_KEY`         | Key for encrypting superuser password | -       |
-| `LANGFLOW_NEW_USER_IS_ACTIVE` | Automatically activates new users     | `False` |
+| Variable                      | Description                                       | Default |
+| ----------------------------- | ------------------------------------------------- | ------- |
+| `LANGFLOW_AUTO_LOGIN`         | Enables automatic login                           | `True`  |
+| `LANGFLOW_SUPERUSER`          | Superuser username                                | -       |
+| `LANGFLOW_SUPERUSER_PASSWORD` | Superuser password                                | -       |
+| `LANGFLOW_SECRET_KEY`         | Key for encrypting superuser password             | -       |
+| `LANGFLOW_NEW_USER_IS_ACTIVE` | Automatically activates new users                 | `False` |
+| `LANGFLOW_NEW_USER_IS_CREATOR` | Automatically gives new users creator privileges | `False` |
 
 ### LANGFLOW_AUTO_LOGIN
 
@@ -158,6 +160,7 @@ LANGFLOW_SUPERUSER=admin
 LANGFLOW_SUPERUSER_PASSWORD=securepassword
 LANGFLOW_SECRET_KEY=dBuuuB_FHLvU8T9eUNlxQF9ppqRxwWpXXQ42kM2_fbg  # Your generated key
 LANGFLOW_NEW_USER_IS_ACTIVE=False
+LANGFLOW_NEW_USER_IS_CREATOR=False
 ```
 
 3. Start Langflow with the values from your `.env` file.
@@ -187,4 +190,12 @@ By default, this variable is set to `False`. When enabled, new users are automat
 
 ```bash
 LANGFLOW_NEW_USER_IS_ACTIVE=False
+```
+
+### LANGFLOW_NEW_USER_IS_CREATOR
+
+By default, this variable is set to `False`. When enabled, new users are automatically given creator privileges.
+
+```bash
+LANGFLOW_NEW_USER_IS_CREATOR=False
 ```

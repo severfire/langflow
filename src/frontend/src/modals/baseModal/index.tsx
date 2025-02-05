@@ -192,6 +192,7 @@ function BaseModal({
   type = "dialog",
   onSubmit,
   onEscapeKeyDown,
+  disable,
 }: BaseModalProps) {
   const headerChild = React.Children.toArray(children).find(
     (child) => (child as React.ReactElement).type === Header,

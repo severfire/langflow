@@ -32,6 +32,7 @@ async def add_user(
     try:
         new_user.password = get_password_hash(user.password)
         new_user.is_active = get_settings_service().auth_settings.NEW_USER_IS_ACTIVE
+        new_user.is_creatoruser = get_settings_service().auth_settings.NEW_USER_IS_CREATOR
         session.add(new_user)
         await session.commit()
         await session.refresh(new_user)

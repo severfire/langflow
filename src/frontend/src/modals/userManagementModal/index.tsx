@@ -34,6 +34,9 @@ export default function UserManagementModal({
   const [confirmPassword, setConfirmPassword] = useState(data?.password ?? "");
   const [isActive, setIsActive] = useState(data?.is_active ?? false);
   const [isSuperUser, setIsSuperUser] = useState(data?.is_superuser ?? false);
+  const [isCreatorUser, setIsCreatorUser] = useState(
+    data?.is_creatoruser ?? false,
+  );
   const [inputState, setInputState] = useState<UserInputType>(CONTROL_NEW_USER);
   const { userData } = useContext(AuthContext);
 
@@ -51,10 +54,14 @@ export default function UserManagementModal({
         setUserName(data.username);
         setIsActive(data.is_active);
         setIsSuperUser(data.is_superuser);
+        setIsCreatorUser(data.is_creatoruser);
 
         handleInput({ target: { name: "username", value: username } });
         handleInput({ target: { name: "is_active", value: isActive } });
         handleInput({ target: { name: "is_superuser", value: isSuperUser } });
+        handleInput({
+          target: { name: "is_creatoruser", value: isCreatorUser },
+        });
       }
     }
   }, [open]);
@@ -65,6 +72,8 @@ export default function UserManagementModal({
     setConfirmPassword("");
     setIsActive(false);
     setIsSuperUser(false);
+    setIsCreatorUser(false);
+    setInputState(CONTROL_NEW_USER);
   }
 
   return (
@@ -272,6 +281,38 @@ export default function UserManagementModal({
                             target: { name: "is_superuser", value },
                           });
                           setIsSuperUser(value);
+                          if (value && !isCreatorUser) {
+                            handleInput({
+                              target: { name: "is_creatoruser", value: true },
+                            });
+                            setIsCreatorUser(true);
+                          }
+                        }}
+                      />
+                    </Form.Control>
+                  </div>
+                </Form.Field>
+              )}
+              {userData?.is_superuser && (
+                <Form.Field name="is_creatoruser">
+                  <div>
+                    <Form.Label className="data-[invalid]:label-invalid mr-3">
+                      Creator
+                    </Form.Label>
+                    <Form.Control asChild>
+                      <Checkbox
+                        checked={isCreatorUser}
+                        value={isCreatorUser}
+                        id="is_creatoruser"
+                        className="relative top-0.5"
+                        disabled={isSuperUser}
+                        onCheckedChange={(value) => {
+                          if (!isSuperUser) {
+                            handleInput({
+                              target: { name: "is_creatoruser", value },
+                            });
+                            setIsCreatorUser(value);
+                          }
                         }}
                       />
                     </Form.Control>

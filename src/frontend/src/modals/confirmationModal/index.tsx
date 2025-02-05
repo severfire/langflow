@@ -43,6 +43,7 @@ function ConfirmationModal({
   open,
   onClose,
   onCancel,
+  disabled = false,
   ...props
 }: ConfirmationModalType) {
   const [modalOpen, setModalOpen] = useState(open ?? false);
@@ -77,9 +78,19 @@ function ConfirmationModal({
     onCancel?.();
   };
 
+  const handleOpenChange = (open: boolean) => {
+    if (!disabled) {
+      setModalOpen(open);
+    }
+  };
+
   return (
-    <BaseModal {...props} open={open} setOpen={setModalOpen}>
-      <BaseModal.Trigger>{triggerChild}</BaseModal.Trigger>
+    <BaseModal
+      {...props}
+      open={disabled ? false : open}
+      setOpen={handleOpenChange}
+    >
+      <BaseModal.Trigger disable={disabled}>{triggerChild}</BaseModal.Trigger>
       <BaseModal.Header description={titleHeader ?? null}>
         <span className="pr-2">{title}</span>
         {icon && (

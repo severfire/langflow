@@ -191,6 +191,34 @@ export default function AdminPage() {
     const userEdit = cloneDeep(user);
     userEdit.is_superuser = !check;
 
+    // If setting as superuser, also set as creator and disable it
+    if (userEdit.is_superuser) {
+      userEdit.is_creatoruser = true;
+    }
+
+    mutateUpdateUser(
+      { user_id: userId, user: userEdit },
+      {
+        onSuccess: () => {
+          resetFilter();
+          setSuccessData({
+            title: USER_EDIT_SUCCESS_ALERT,
+          });
+        },
+        onError: (error) => {
+          setErrorData({
+            title: USER_EDIT_ERROR_ALERT,
+            list: [error["response"]["data"]["detail"]],
+          });
+        },
+      },
+    );
+  }
+
+  function handleCreatorUserEdit(check, userId, user) {
+    const userEdit = cloneDeep(user);
+    userEdit.is_creatoruser = !check;
+
     mutateUpdateUser(
       { user_id: userId, user: userEdit },
       {
@@ -330,6 +358,7 @@ export default function AdminPage() {
                       <TableHead className="h-10">Username</TableHead>
                       <TableHead className="h-10">Active</TableHead>
                       <TableHead className="h-10">Superuser</TableHead>
+                      <TableHead className="h-10">Creator</TableHead>
                       <TableHead className="h-10">Created At</TableHead>
                       <TableHead className="h-10">Updated At</TableHead>
                       <TableHead className="h-10 w-[100px] text-right"></TableHead>
@@ -383,6 +412,7 @@ export default function AdminPage() {
                               </ConfirmationModal.Trigger>
                             </ConfirmationModal>
                           </TableCell>
+
                           <TableCell className="relative left-1 truncate py-2 text-align-last-left">
                             <ConfirmationModal
                               size="x-small"
@@ -411,6 +441,44 @@ export default function AdminPage() {
                               <ConfirmationModal.Trigger>
                                 <div className="flex w-fit">
                                   <CheckBoxDiv checked={user.is_superuser} />
+                                </div>
+                              </ConfirmationModal.Trigger>
+                            </ConfirmationModal>
+                          </TableCell>
+                          <TableCell className="relative left-1 truncate py-2 text-align-last-left">
+                            <ConfirmationModal
+                              size="x-small"
+                              title="Edit"
+                              titleHeader={`${user.username}`}
+                              modalContentTitle="Attention!"
+                              cancelText="Cancel"
+                              confirmationText="Confirm"
+                              icon={"UserCog2"}
+                              data={user}
+                              index={index}
+                              disabled={user.is_superuser}
+                              onConfirm={(index, user) => {
+                                handleCreatorUserEdit(
+                                  user.is_creatoruser,
+                                  user.id,
+                                  user,
+                                );
+                              }}
+                            >
+                              <ConfirmationModal.Content>
+                                <span>
+                                  Are you sure you want to change the role of
+                                  this user?
+                                </span>
+                              </ConfirmationModal.Content>
+                              <ConfirmationModal.Trigger>
+                                <div className="flex w-fit">
+                                  <CheckBoxDiv
+                                    checked={
+                                      user.is_creatoruser || user.is_superuser
+                                    }
+                                    disabled={user.is_superuser}
+                                  />
                                 </div>
                               </ConfirmationModal.Trigger>
                             </ConfirmationModal>
