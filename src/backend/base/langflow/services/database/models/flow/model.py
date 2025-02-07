@@ -22,6 +22,7 @@ from langflow.schema import Data
 
 if TYPE_CHECKING:
     from langflow.services.database.models import TransactionTable
+    from langflow.services.database.models.flow_shared.model import FlowShared
     from langflow.services.database.models.folder import Folder
     from langflow.services.database.models.message import MessageTable
     from langflow.services.database.models.user import User
@@ -173,6 +174,7 @@ class Flow(FlowBase, table=True):  # type: ignore[call-arg]
     messages: list["MessageTable"] = Relationship(back_populates="flow")
     transactions: list["TransactionTable"] = Relationship(back_populates="flow")
     vertex_builds: list["VertexBuildTable"] = Relationship(back_populates="flow")
+    shared_flows: list["FlowShared"] = Relationship(back_populates="flow", sa_relationship_kwargs={"cascade": "delete"})
 
     def to_data(self):
         serialized = self.model_dump()

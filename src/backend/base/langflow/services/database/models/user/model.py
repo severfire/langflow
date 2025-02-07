@@ -9,6 +9,7 @@ from langflow.schema.serialize import UUIDstr
 if TYPE_CHECKING:
     from langflow.services.database.models.api_key import ApiKey
     from langflow.services.database.models.flow import Flow
+    from langflow.services.database.models.flow_shared.model import FlowShared
     from langflow.services.database.models.folder import Folder
     from langflow.services.database.models.variable import Variable
 
@@ -38,6 +39,7 @@ class User(SQLModel, table=True):  # type: ignore[call-arg]
         back_populates="user",
         sa_relationship_kwargs={"cascade": "delete"},
     )
+    shared_flows: list["FlowShared"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "delete"})
 
 
 class UserCreate(SQLModel):
