@@ -81,6 +81,16 @@ export default function SettingsPage(): JSX.Element {
       ),
     },
     {
+      title: "OAuth Providers",
+      href: "/settings/oauth-accounts",
+      icon: (
+        <ForwardedIconComponent
+          name="KeyRound"
+          className="w-4 flex-shrink-0 justify-start stroke-[1.5]"
+        />
+      ),
+    },
+    {
       title: "DB Providers",
       href: "/settings/db-providers",
       icon: (

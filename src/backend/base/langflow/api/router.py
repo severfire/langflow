@@ -19,6 +19,7 @@ from langflow.api.v1 import (
     model_options_router,
     models_router,
     monitor_router,
+    oauth_accounts_router,
     openai_responses_router,
     projects_router,
     starter_projects_router,
@@ -60,6 +61,7 @@ router_v1.include_router(flow_events_router)
 router_v1.include_router(flow_version_router)
 router_v1.include_router(users_router)
 router_v1.include_router(api_key_router)
+router_v1.include_router(oauth_accounts_router)
 router_v1.include_router(login_router)
 router_v1.include_router(variables_router)
 router_v1.include_router(files_router)

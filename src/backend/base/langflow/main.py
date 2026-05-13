@@ -409,6 +409,11 @@ def get_lifespan(*, fix_migration=False, version=None):
             # Allows the server to start first to avoid race conditions with MCP Server startup
             mcp_init_task = asyncio.create_task(delayed_init_mcp_servers())
 
+            # Background OAuth token auto-refresh loop (runs every 60 s)
+            from langflow.services.oauth_accounts.service import run_token_refresh_loop
+
+            oauth_refresh_task = asyncio.create_task(run_token_refresh_loop(interval_seconds=60))
+
             # v1 and project MCP server context managers
             from langflow.api.v1.mcp import start_streamable_http_manager
             from langflow.api.v1.mcp_projects import start_project_task_group
@@ -483,6 +488,9 @@ def get_lifespan(*, fix_migration=False, version=None):
                     if mcp_init_task and not mcp_init_task.done():
                         mcp_init_task.cancel()
                         tasks_to_cancel.append(mcp_init_task)
+                    if oauth_refresh_task and not oauth_refresh_task.done():
+                        oauth_refresh_task.cancel()
+                        tasks_to_cancel.append(oauth_refresh_task)
                     if tasks_to_cancel:
                         # Wait for all tasks to complete, capturing exceptions
                         results = await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
