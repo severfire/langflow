@@ -410,7 +410,7 @@ def get_lifespan(*, fix_migration=False, version=None):
             mcp_init_task = asyncio.create_task(delayed_init_mcp_servers())
 
             # Background OAuth token auto-refresh loop (runs every 60 s)
-            from langflow.services.oauth_accounts.service import run_token_refresh_loop
+            from langflow.services.oauth_providers.service import run_token_refresh_loop
 
             oauth_refresh_task = asyncio.create_task(run_token_refresh_loop(interval_seconds=60))
 

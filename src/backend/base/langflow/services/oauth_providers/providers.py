@@ -23,6 +23,8 @@ class ProviderDef:
     docs_url: str | None = None
     # Extra hint fields shown in the UI
     hints: dict[str, str] = field(default_factory=dict)
+    # Langflow global variable names updated when OAuth credentials are refreshed
+    global_api_key_variables: list[str] = field(default_factory=list)
 
 
 PROVIDERS: dict[str, ProviderDef] = {
@@ -36,6 +38,7 @@ PROVIDERS: dict[str, ProviderDef] = {
         default_scopes=["openid", "email", "profile"],
         supported_flows=["service_account", "authorization_code"],
         docs_url="https://developers.google.com/identity/protocols/oauth2",
+        global_api_key_variables=["GOOGLE_API_KEY"],
         hints={
             "service_account": (
                 "Paste the contents of your Google Service Account JSON key file "

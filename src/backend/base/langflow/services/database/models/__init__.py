@@ -12,7 +12,7 @@ from .jobs import Job
 from .knowledge_base import KnowledgeBaseRecord, KnowledgeBaseStatus
 from .memory_base import MemoryBase, MemoryBaseSession, MemoryBaseWorkflowRun, MessageIngestionRecord
 from .message import MessageTable
-from .oauth_account import OAuthAccount
+from .oauth_provider import OAuthAccount
 from .traces.model import SpanTable, TraceTable
 from .transactions import TransactionTable
 from .user import User

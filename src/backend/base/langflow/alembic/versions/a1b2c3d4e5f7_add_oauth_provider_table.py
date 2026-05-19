@@ -1,4 +1,4 @@
-"""add oauth_account table
+"""add oauth_provider table
 
 Phase: EXPAND
 
@@ -19,16 +19,20 @@ down_revision: str | None = "mb01b2c3d4e5"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-TABLE_NAME = "oauth_account"
+TABLE_NAME = "oauth_provider"
 
 
 def upgrade() -> None:
     conn = op.get_bind()
 
     # Guard: SQLModel.create_all() may have already created the table on a
-    # fresh database before Alembic runs. Skip DDL in that case; the schema
-    # is already correct from the model definition.
+    # fresh database before Alembic runs. Skip create in that case; add any
+    # columns that are missing from an older model definition.
     if migration.table_exists(TABLE_NAME, conn):
+        if not migration.column_exists(TABLE_NAME, "auth_endpoint", conn):
+            op.add_column(TABLE_NAME, sa.Column("auth_endpoint", sa.Text(), nullable=True))
+        if not migration.column_exists(TABLE_NAME, "auto_refresh_interval_minutes", conn):
+            op.add_column(TABLE_NAME, sa.Column("auto_refresh_interval_minutes", sa.Integer(), nullable=True))
         return
 
     op.create_table(
@@ -46,25 +50,27 @@ def upgrade() -> None:
         sa.Column("scopes", sa.JSON(), nullable=False, server_default="[]"),
         sa.Column("token_endpoint", sa.Text(), nullable=True),
         sa.Column("userinfo_endpoint", sa.Text(), nullable=True),
+        sa.Column("auth_endpoint", sa.Text(), nullable=True),
         sa.Column("token_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_validated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("auto_refresh_interval_minutes", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("id"),
     )
-    op.create_index("ix_oauth_account_user_id", TABLE_NAME, ["user_id"])
-    op.create_index("ix_oauth_account_provider", TABLE_NAME, ["provider"])
-    op.create_index("ix_oauth_account_name", TABLE_NAME, ["name"])
+    op.create_index("ix_oauth_provider_user_id", TABLE_NAME, ["user_id"])
+    op.create_index("ix_oauth_provider_provider", TABLE_NAME, ["provider"])
+    op.create_index("ix_oauth_provider_name", TABLE_NAME, ["name"])
 
 
 def downgrade() -> None:
     conn = op.get_bind()
     if not migration.table_exists(TABLE_NAME, conn):
         return
-    op.drop_index("ix_oauth_account_name", table_name=TABLE_NAME)
-    op.drop_index("ix_oauth_account_provider", table_name=TABLE_NAME)
-    op.drop_index("ix_oauth_account_user_id", table_name=TABLE_NAME)
+    op.drop_index("ix_oauth_provider_name", table_name=TABLE_NAME)
+    op.drop_index("ix_oauth_provider_provider", table_name=TABLE_NAME)
+    op.drop_index("ix_oauth_provider_user_id", table_name=TABLE_NAME)
     op.drop_table(TABLE_NAME)

@@ -14,7 +14,7 @@ from langflow.api.v1.memories import router as memories_router
 from langflow.api.v1.model_options import router as model_options_router
 from langflow.api.v1.models import router as models_router
 from langflow.api.v1.monitor import router as monitor_router
-from langflow.api.v1.oauth_accounts import router as oauth_accounts_router
+from langflow.api.v1.oauth_providers import router as oauth_providers_router
 from langflow.api.v1.openai_responses import router as openai_responses_router
 from langflow.api.v1.projects import router as projects_router
 from langflow.api.v1.starter_projects import router as starter_projects_router
@@ -42,7 +42,7 @@ __all__ = [
     "model_options_router",
     "models_router",
     "monitor_router",
-    "oauth_accounts_router",
+    "oauth_providers_router",
     "openai_responses_router",
     "projects_router",
     "starter_projects_router",

@@ -40,7 +40,7 @@ import MCPServersPage from "./pages/SettingsPage/pages/MCPServersPage";
 import McpClientPage from "./pages/SettingsPage/pages/McpClientPage";
 import ModelProvidersPage from "./pages/SettingsPage/pages/ModelProvidersPage";
 import MessagesPage from "./pages/SettingsPage/pages/messagesPage";
-import OAuthAccountsPage from "./pages/SettingsPage/pages/OAuthAccountsPage";
+import OAuthProvidersPage from "./pages/SettingsPage/pages/OAuthProvidersPage";
 import ShortcutsPage from "./pages/SettingsPage/pages/ShortcutsPage";
 import ViewPage from "./pages/ViewPage";
 
@@ -163,8 +163,8 @@ const router = createBrowserRouter(
 
                   <Route path="api-keys" element={<ApiKeysPage />} />
                   <Route
-                    path="oauth-accounts"
-                    element={<OAuthAccountsPage />}
+                    path="oauth-providers"
+                    element={<OAuthProvidersPage />}
                   />
                   <Route
                     path="general/:scrollId?"

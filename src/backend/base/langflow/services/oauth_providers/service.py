@@ -8,7 +8,6 @@ type we need (client_credentials, authorization_code + PKCE, refresh).
 from __future__ import annotations
 
 import json
-import logging
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
@@ -16,54 +15,54 @@ from uuid import UUID
 
 import httpx
 from authlib.integrations.httpx_client import AsyncOAuth2Client
+from lfx.log.logger import logger
 
 if TYPE_CHECKING:
     from sqlmodel.ext.asyncio.session import AsyncSession
 
-from langflow.services.database.models.oauth_account.crud import (
-    create_oauth_account,
+from langflow.services.database.models.oauth_provider.crud import (
+    create_oauth_provider,
     decrypt_account_access_token,
     decrypt_account_refresh_token,
     decrypt_account_secret,
     decrypt_extra_data,
-    delete_oauth_account,
-    get_oauth_account,
-    list_accounts_due_for_refresh,
-    list_oauth_accounts,
+    delete_oauth_provider,
+    get_oauth_provider,
+    list_oauth_providers,
+    list_providers_due_for_refresh,
     save_tokens,
-    update_oauth_account,
+    update_oauth_provider,
 )
-from langflow.services.database.models.oauth_account.model import (
+from langflow.services.database.models.oauth_provider.model import (
     OAuthAccount,
-    OAuthAccountCreate,
-    OAuthAccountRead,
-    OAuthAccountUpdate,
     OAuthFlowType,
+    OAuthProviderCreate,
+    OAuthProviderRead,
+    OAuthProviderUpdate,
     RotateTokensResponse,
     ValidateConnectionResponse,
     _ensure_utc,
 )
-from langflow.services.oauth_accounts.providers import get_provider
+from langflow.services.deps import get_variable_service
+from langflow.services.oauth_providers.providers import get_provider
 
-logger = logging.getLogger(__name__)
 
-
-class OAuthAccountService:
+class OAuthProviderService:
     """Service layer for creating, validating, and rotating OAuth credentials."""
 
     # ------------------------------------------------------------------
     # CRUD wrappers
     # ------------------------------------------------------------------
 
-    async def list_accounts(self, session: AsyncSession, user_id: UUID) -> list[OAuthAccountRead]:
-        return await list_oauth_accounts(session, user_id)
+    async def list_accounts(self, session: AsyncSession, user_id: UUID) -> list[OAuthProviderRead]:
+        return await list_oauth_providers(session, user_id)
 
     async def create_account(
         self,
         session: AsyncSession,
         user_id: UUID,
-        payload: OAuthAccountCreate,
-    ) -> OAuthAccountRead:
+        payload: OAuthProviderCreate,
+    ) -> OAuthProviderRead:
         provider_def = get_provider(payload.provider)
         if provider_def and not payload.auth_endpoint:
             payload.auth_endpoint = provider_def.default_auth_endpoint
@@ -72,19 +71,96 @@ class OAuthAccountService:
         if provider_def and not payload.userinfo_endpoint:
             payload.userinfo_endpoint = provider_def.default_userinfo_endpoint
 
-        return await create_oauth_account(session, payload, user_id)
+        return await create_oauth_provider(session, payload, user_id)
 
     async def update_account(
         self,
         session: AsyncSession,
         user_id: UUID,
         account_id: UUID,
-        payload: OAuthAccountUpdate,
-    ) -> OAuthAccountRead | None:
-        return await update_oauth_account(session, account_id, user_id, payload)
+        payload: OAuthProviderUpdate,
+    ) -> OAuthProviderRead | None:
+        return await update_oauth_provider(session, account_id, user_id, payload)
 
     async def delete_account(self, session: AsyncSession, user_id: UUID, account_id: UUID) -> None:
-        await delete_oauth_account(session, account_id, user_id)
+        await delete_oauth_provider(session, account_id, user_id)
+
+    async def _sync_global_api_keys(
+        self,
+        session: AsyncSession,
+        account: OAuthAccount,
+        user_id: UUID,
+    ) -> list[str]:
+        """Push the current OAuth credential into mapped Langflow global variables."""
+        provider_def = get_provider(account.provider)
+        if not provider_def or not provider_def.global_api_key_variables:
+            return []
+
+        if account.flow_type == OAuthFlowType.api_key:
+            credential = decrypt_account_secret(account)
+        else:
+            credential = decrypt_account_access_token(account)
+
+        if not credential:
+            return []
+
+        from langflow.services.variable.constants import CREDENTIAL_TYPE
+
+        variable_service = get_variable_service()
+        synced: list[str] = []
+        for var_name in provider_def.global_api_key_variables:
+            try:
+                try:
+                    await variable_service.update_variable(user_id, var_name, credential, session=session)
+                except ValueError:
+                    await variable_service.create_variable(
+                        user_id=user_id,
+                        name=var_name,
+                        value=credential,
+                        default_fields=[provider_def.display_name, var_name],
+                        type_=CREDENTIAL_TYPE,
+                        session=session,
+                    )
+                synced.append(var_name)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Failed to sync global variable %s from OAuth account %s (%s): %s",
+                    var_name,
+                    account.id,
+                    account.name,
+                    exc,
+                )
+        return synced
+
+    def _log_credential_refresh(
+        self,
+        account: OAuthAccount,
+        *,
+        auto: bool,
+        synced_global_variables: list[str],
+    ) -> None:
+        prefix = "Auto-refreshed" if auto else "Refreshed"
+        if account.flow_type == OAuthFlowType.api_key:
+            logger.info(
+                "%s API key credentials for OAuth account %s (%s)",
+                prefix,
+                account.id,
+                account.name,
+            )
+        else:
+            logger.info(
+                "%s tokens for OAuth account %s (%s)",
+                prefix,
+                account.id,
+                account.name,
+            )
+        for var_name in synced_global_variables:
+            logger.info(
+                "Synced global API key variable %s from OAuth account %s (%s)",
+                var_name,
+                account.id,
+                account.name,
+            )
 
     # ------------------------------------------------------------------
     # Authorization Code Flow helpers
@@ -103,9 +179,9 @@ class OAuthAccountService:
         The ``state`` is a short-lived signed token that encodes the account/user
         identifiers so the callback can verify it without server-side session storage.
         """
-        account = await get_oauth_account(session, account_id, user_id)
+        account = await get_oauth_provider(session, account_id, user_id)
         if account is None:
-            msg = "OAuth account not found"
+            msg = "OAuth provider not found"
             raise ValueError(msg)
         if account.flow_type != OAuthFlowType.authorization_code:
             msg = f"Account '{account.name}' uses flow '{account.flow_type}', not authorization_code"
@@ -170,9 +246,9 @@ class OAuthAccountService:
         account_id = UUID(payload["account_id"])
         user_id = UUID(payload["user_id"])
 
-        account = await get_oauth_account(session, account_id, user_id)
+        account = await get_oauth_provider(session, account_id, user_id)
         if account is None:
-            msg = "OAuth account not found"
+            msg = "OAuth provider not found"
             raise ValueError(msg)
 
         client_secret = decrypt_account_secret(account)
@@ -305,7 +381,7 @@ class OAuthAccountService:
         even though the stored expiry timestamp has not passed yet — this
         happens when the token is revoked on the provider side.
         """
-        account = await get_oauth_account(session, account_id, user_id)
+        account = await get_oauth_provider(session, account_id, user_id)
         if account is None:
             return None
 
@@ -405,9 +481,9 @@ class OAuthAccountService:
         account_id: UUID,
     ) -> ValidateConnectionResponse:
         """Test that stored credentials are working by calling the userinfo endpoint."""
-        account = await get_oauth_account(session, account_id, user_id)
+        account = await get_oauth_provider(session, account_id, user_id)
         if account is None:
-            return ValidateConnectionResponse(success=False, message="OAuth account not found")
+            return ValidateConnectionResponse(success=False, message="OAuth provider not found")
 
         try:
             access_token = await self.get_valid_token(session, user_id, account_id)
@@ -536,11 +612,22 @@ class OAuthAccountService:
         account_id: UUID,
     ) -> RotateTokensResponse:
         """Force-refresh / re-acquire tokens for an account."""
-        account = await get_oauth_account(session, account_id, user_id)
+        account = await get_oauth_provider(session, account_id, user_id)
         if account is None:
-            return RotateTokensResponse(success=False, message="OAuth account not found")
+            return RotateTokensResponse(success=False, message="OAuth provider not found")
 
         try:
+            if account.flow_type == OAuthFlowType.api_key:
+                synced = await self._sync_global_api_keys(session, account, user_id)
+                self._log_credential_refresh(account, auto=False, synced_global_variables=synced)
+                return RotateTokensResponse(
+                    success=True,
+                    message="API key synced to global variables"
+                    if synced
+                    else "API key credentials are current (no global variables mapped for this provider)",
+                    synced_global_variables=synced,
+                )
+
             refresh_tok = decrypt_account_refresh_token(account)
             client_secret = decrypt_account_secret(account)
 
@@ -558,19 +645,25 @@ class OAuthAccountService:
                     token_expires_at=expires_at,
                 )
                 await session.refresh(account)
+                synced = await self._sync_global_api_keys(session, account, user_id)
+                self._log_credential_refresh(account, auto=False, synced_global_variables=synced)
                 return RotateTokensResponse(
                     success=True,
                     message="Tokens refreshed successfully",
                     token_expires_at=account.token_expires_at,
+                    synced_global_variables=synced,
                 )
 
             # No refresh token: re-acquire from scratch
             await self._acquire_token(session, account)
             await session.refresh(account)
+            synced = await self._sync_global_api_keys(session, account, user_id)
+            self._log_credential_refresh(account, auto=False, synced_global_variables=synced)
             return RotateTokensResponse(
                 success=True,
                 message="Tokens re-acquired successfully",
                 token_expires_at=account.token_expires_at,
+                synced_global_variables=synced,
             )
 
         except Exception as exc:  # noqa: BLE001
@@ -579,12 +672,48 @@ class OAuthAccountService:
 
     async def refresh_due_accounts(self, session: AsyncSession) -> None:
         """Rotate tokens for all accounts whose auto-refresh interval has elapsed."""
-        accounts = await list_accounts_due_for_refresh(session)
+        accounts = await list_providers_due_for_refresh(session)
         for account in accounts:
             try:
-                await self._acquire_token(session, account)
+                if account.flow_type == OAuthFlowType.authorization_code:
+                    # authorization_code accounts cannot re-authorize headlessly; use the
+                    # stored refresh token if available, otherwise skip silently.
+                    refresh_tok = decrypt_account_refresh_token(account)
+                    client_secret = decrypt_account_secret(account)
+                    if not (refresh_tok and client_secret and account.token_endpoint):
+                        logger.debug(
+                            "Skipping auto-refresh for OAuth account %s (%s): "
+                            "no refresh token available for authorization_code flow",
+                            account.id,
+                            account.name,
+                        )
+                        continue
+                    token_data = await self._refresh_token(account, client_secret, refresh_tok)
+                    expires_in = token_data.get("expires_in")
+                    expires_at = None
+                    if expires_in:
+                        expires_at = datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))
+                    elif token_data.get("expires_at"):
+                        raw = token_data["expires_at"]
+                        expires_at = (
+                            datetime.fromtimestamp(raw, tz=timezone.utc) if isinstance(raw, (int, float)) else raw
+                        )
+                    await save_tokens(
+                        session,
+                        account,
+                        access_token=token_data.get("access_token"),
+                        refresh_token=token_data.get("refresh_token", refresh_tok),
+                        token_expires_at=expires_at,
+                    )
+                else:
+                    await self._acquire_token(session, account)
                 await session.refresh(account)
-                logger.info("Auto-refreshed tokens for OAuth account %s (%s)", account.id, account.name)
+                synced = await self._sync_global_api_keys(session, account, account.user_id)
+                self._log_credential_refresh(
+                    account,
+                    auto=True,
+                    synced_global_variables=synced,
+                )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "Auto-refresh failed for OAuth account %s (%s): %s",
@@ -594,13 +723,13 @@ class OAuthAccountService:
                 )
 
 
-_service_instance: OAuthAccountService | None = None
+_service_instance: OAuthProviderService | None = None
 
 
-def get_oauth_account_service() -> OAuthAccountService:
+def get_oauth_provider_service() -> OAuthProviderService:
     global _service_instance  # noqa: PLW0603
     if _service_instance is None:
-        _service_instance = OAuthAccountService()
+        _service_instance = OAuthProviderService()
     return _service_instance
 
 
@@ -610,7 +739,7 @@ async def run_token_refresh_loop(interval_seconds: int = 60) -> None:
 
     from langflow.services.deps import session_scope
 
-    svc = get_oauth_account_service()
+    svc = get_oauth_provider_service()
     while True:
         await asyncio.sleep(interval_seconds)
         try:

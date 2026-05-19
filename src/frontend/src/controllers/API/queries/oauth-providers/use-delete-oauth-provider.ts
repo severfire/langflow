@@ -3,21 +3,21 @@ import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
 
-interface IDeleteOAuthAccount {
+interface IDeleteOAuthProvider {
   accountId: string;
 }
 
-export const useDeleteOAuthAccount: useMutationFunctionType<
+export const useDeleteOAuthProvider: useMutationFunctionType<
   undefined,
-  IDeleteOAuthAccount
+  IDeleteOAuthProvider
 > = (options) => {
   const { mutate } = UseRequestProcessor();
 
-  const deleteOAuthAccountFn = async (
-    payload: IDeleteOAuthAccount,
+  const deleteOAuthProviderFn = async (
+    payload: IDeleteOAuthProvider,
   ): Promise<void> => {
-    await api.delete(`${getURL("OAUTH_ACCOUNTS")}/${payload.accountId}`);
+    await api.delete(`${getURL("OAUTH_PROVIDERS")}/${payload.accountId}`);
   };
 
-  return mutate(["useDeleteOAuthAccount"], deleteOAuthAccountFn, options);
+  return mutate(["useDeleteOAuthProvider"], deleteOAuthProviderFn, options);
 };

@@ -82,7 +82,7 @@ export default function SettingsPage(): JSX.Element {
     },
     {
       title: "OAuth Providers",
-      href: "/settings/oauth-accounts",
+      href: "/settings/oauth-providers",
       icon: (
         <ForwardedIconComponent
           name="KeyRound"

@@ -21,18 +21,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  type IOAuthAccountRead,
-  type IOAuthAccountUpdate,
   type IOAuthProvider,
+  type IOAuthProviderRead,
+  type IOAuthProviderUpdate,
   type IRotateTokensResponse,
   type IValidateConnectionResponse,
-  useAuthorizeOAuthAccount,
+  useAuthorizeOAuthProvider,
   useGetOAuthProvidersQuery,
-  usePatchOAuthAccount,
-  usePostOAuthAccount,
-  useRotateOAuthAccount,
-  useValidateOAuthAccount,
-} from "@/controllers/API/queries/oauth-accounts";
+  useGetOAuthProviderTypesQuery,
+  usePatchOAuthProvider,
+  usePostOAuthProvider,
+  useRotateOAuthProvider,
+  useValidateOAuthProvider,
+} from "@/controllers/API/queries/oauth-providers";
 import { BASE_URL_API, PROXY_TARGET } from "@/customization/config-constants";
 import useAlertStore from "@/stores/alertStore";
 import { cn } from "@/utils/utils";
@@ -86,13 +87,6 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function computeTokenStatus(
-  expiresAt: string | null,
-): "valid" | "expired" | "not_connected" | "unknown" {
-  if (!expiresAt) return "unknown";
-  return new Date(expiresAt) > new Date() ? "valid" : "expired";
-}
-
 function oauthConsoleSuggestions(): {
   authorizedJavaScriptOrigin: string;
   redirectUriCandidates: string[];
@@ -126,17 +120,36 @@ function oauthConsoleSuggestions(): {
     apiSideOrigin = authorizedJavaScriptOrigin;
   }
 
-  const callbackUri = `${apiSideOrigin}/api/v1/oauth_accounts/callback`;
+  const callbackUri = `${apiSideOrigin}/api/v1/oauth_providers/callback`;
   const redirectUriCandidates = Array.from(
     new Set([
       callbackUri,
       ...(apiSideOrigin === authorizedJavaScriptOrigin
         ? []
-        : [`${authorizedJavaScriptOrigin}/api/v1/oauth_accounts/callback`]),
+        : [`${authorizedJavaScriptOrigin}/api/v1/oauth_providers/callback`]),
     ]),
   );
 
   return { authorizedJavaScriptOrigin, redirectUriCandidates, callbackUri };
+}
+
+/** Select option values in seconds; API stores `auto_refresh_interval_minutes`. */
+const OAUTH_AUTO_REFRESH_INTERVAL_SECONDS = [
+  60, 300, 900, 1800, 3600, 21600, 43200, 86400,
+] as const;
+
+function formatOAuthAutoRefreshLabel(intervalMinutes: number): string {
+  if (intervalMinutes <= 0) return "";
+  if (intervalMinutes < 60) {
+    return intervalMinutes === 1
+      ? "Every 1 minute"
+      : `Every ${intervalMinutes} minutes`;
+  }
+  if (intervalMinutes % 60 === 0) {
+    const hours = intervalMinutes / 60;
+    return hours === 1 ? "Every 1 hour" : `Every ${hours} hours`;
+  }
+  return `Every ${intervalMinutes} minutes`;
 }
 
 // ---------------------------------------------------------------------------
@@ -176,85 +189,76 @@ function OAuthCopyRow({
   );
 }
 
-function StepIndicator({
-  step,
+function OAuthStepper({
   steps,
+  activeStep,
   onStepClick,
 }: {
-  step: number;
-  steps: string[];
-  /** Called with the 1-based step number when a completed step is clicked. */
-  onStepClick?: (targetStep: number) => void;
+  steps: readonly { number: number; label: string }[];
+  activeStep: number;
+  onStepClick?: (step: number) => void;
 }) {
+  const progressPercent =
+    steps.length > 1 ? ((activeStep - 1) / (steps.length - 1)) * 100 : 0;
+  // Offset the bar so it starts/ends at each circle's center regardless of label width.
+  // Each step is flex-1, so its center is at (100% / (2 * N)) from the edge.
+  const edgeOffset = `${100 / (2 * steps.length)}%`;
   return (
-    <div className="mt-4 flex items-center gap-0">
-      {steps.map((label, i) => {
-        const stepNum = i + 1;
-        const isCompleted = stepNum < step;
-        const isCurrent = stepNum === step;
-        const isClickable = isCompleted && !!onStepClick;
-
-        return (
-          <div key={i} className="flex items-center">
-            {i > 0 && (
-              <div
-                className={cn(
-                  "h-px w-6 shrink-0 bg-border transition-colors",
-                  i < step && "bg-primary/50",
-                )}
-              />
-            )}
+    <div className="relative mx-auto h-[52px] w-full max-w-[700px]">
+      <div
+        className="absolute top-4 h-[2px] bg-muted"
+        style={{ left: edgeOffset, right: edgeOffset }}
+      >
+        <div
+          className="h-full bg-foreground transition-all duration-300"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+      <div className="relative flex h-full items-start">
+        {steps.map((s) => {
+          const isActive = activeStep >= s.number;
+          const isClickable = !!onStepClick && s.number < activeStep;
+          return (
             <div
+              key={s.number}
+              className={cn(
+                "flex flex-1 flex-col items-center gap-1",
+                isClickable && "cursor-pointer",
+              )}
               role={isClickable ? "button" : undefined}
               tabIndex={isClickable ? 0 : undefined}
-              onClick={isClickable ? () => onStepClick(stepNum) : undefined}
+              onClick={isClickable ? () => onStepClick(s.number) : undefined}
               onKeyDown={
                 isClickable
                   ? (e) => {
                       if (e.key === "Enter" || e.key === " ")
-                        onStepClick(stepNum);
+                        onStepClick(s.number);
                     }
                   : undefined
               }
-              className={cn(
-                "flex items-center gap-1.5 rounded",
-                isClickable &&
-                  "cursor-pointer hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
             >
               <div
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold transition-colors",
-                  isCurrent
-                    ? "bg-primary text-primary-foreground"
-                    : isCompleted
-                      ? "bg-primary/20 text-primary"
-                      : "bg-muted text-muted-foreground",
+                  "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-foreground text-background"
+                    : "bg-muted text-muted-foreground",
                 )}
               >
-                {isCompleted ? (
-                  <ForwardedIconComponent
-                    name="Check"
-                    className="h-2.5 w-2.5"
-                  />
-                ) : (
-                  stepNum
-                )}
+                {s.number}
               </div>
               <span
                 className={cn(
-                  "hidden text-[11px] sm:inline",
-                  isCurrent
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground",
+                  "whitespace-nowrap text-xs text-foreground",
+                  isActive && "font-medium",
                 )}
               >
-                {label}
+                {s.label}
               </span>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -479,39 +483,39 @@ function CredentialsForm({
 // Main modal
 // ---------------------------------------------------------------------------
 
-interface OAuthAccountModalProps {
+interface OAuthProviderModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
   mode?: "create" | "edit";
-  initialData?: IOAuthAccountRead;
+  initialData?: IOAuthProviderRead;
 }
 
-export default function AddOAuthAccountModal({
+export default function AddOAuthProviderModal({
   open,
   onClose,
   onSuccess,
   mode = "create",
   initialData,
-}: OAuthAccountModalProps) {
+}: OAuthProviderModalProps) {
   const isEditMode = mode === "edit";
 
   const setErrorData = useAlertStore((state) => state.setErrorData);
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
 
-  const { data: rawProviders = [] } = useGetOAuthProvidersQuery();
+  const { data: rawProviders = [] } = useGetOAuthProviderTypesQuery();
   const providers = rawProviders.filter((p) =>
     (SUPPORTED_PROVIDER_IDS as readonly string[]).includes(p.id),
   );
-  const { mutate: postAccount, isPending: isPosting } = usePostOAuthAccount();
+  const { mutate: postAccount, isPending: isPosting } = usePostOAuthProvider();
   const { mutate: patchAccount, isPending: isPatching } =
-    usePatchOAuthAccount();
+    usePatchOAuthProvider();
   const { mutate: validateAccount, isPending: isValidating } =
-    useValidateOAuthAccount();
+    useValidateOAuthProvider();
   const { mutate: rotateAccount, isPending: isRotating } =
-    useRotateOAuthAccount();
+    useRotateOAuthProvider();
   const { mutate: authorizeAccount, isPending: isAuthorizing } =
-    useAuthorizeOAuthAccount();
+    useAuthorizeOAuthProvider();
 
   const isPending = isPosting || isPatching;
 
@@ -545,7 +549,7 @@ export default function AddOAuthAccountModal({
 
   // Save / connection state
   const [savedAccountId, setSavedAccountId] = useState<string | null>(null);
-  const [lastSavedData, setLastSavedData] = useState<IOAuthAccountRead | null>(
+  const [lastSavedData, setLastSavedData] = useState<IOAuthProviderRead | null>(
     null,
   );
   const [validationResult, setValidationResult] =
@@ -565,7 +569,7 @@ export default function AddOAuthAccountModal({
     "settings",
   );
 
-  // Auto-refresh interval (minutes; null = disabled)
+  // Auto-refresh interval stored as minutes (backend contract); select values are seconds.
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number | null>(
     null,
   );
@@ -584,6 +588,19 @@ export default function AddOAuthAccountModal({
   const [liveNextRefreshAt, setLiveNextRefreshAt] = useState<string | null>(
     null,
   );
+  const [liveLastUsedAt, setLiveLastUsedAt] = useState<string | null>(null);
+  const [liveCreatedAt, setLiveCreatedAt] = useState<string | null>(null);
+  const [manualRefreshState, setManualRefreshState] = useState<{
+    refreshedAt: string;
+    previousStatus: "valid" | "expired" | "not_connected" | "unknown";
+    previousExpiresAt: string | null;
+    newExpiresAt: string | null;
+    message: string;
+  } | null>(null);
+
+  const { refetch: refetchOAuthProviders } = useGetOAuthProvidersQuery({
+    enabled: false,
+  });
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -614,6 +631,9 @@ export default function AddOAuthAccountModal({
       setLiveTokenExpiresAt(initialData.token_expires_at);
       setLiveLastValidatedAt(initialData.last_validated_at);
       setLiveNextRefreshAt(initialData.next_refresh_at ?? null);
+      setLiveLastUsedAt(initialData.last_used_at);
+      setLiveCreatedAt(initialData.created_at);
+      setManualRefreshState(null);
     } else if (!isEditMode) {
       setName("");
       setProviderId("google");
@@ -637,6 +657,9 @@ export default function AddOAuthAccountModal({
       setLiveTokenExpiresAt(null);
       setLiveLastValidatedAt(null);
       setLiveNextRefreshAt(null);
+      setLiveLastUsedAt(null);
+      setLiveCreatedAt(null);
+      setManualRefreshState(null);
     }
   }, [open, isEditMode, initialData]);
 
@@ -686,8 +709,68 @@ export default function AddOAuthAccountModal({
 
   const isAuthCodeFlow = flowType === "authorization_code";
 
-  // Wizard: step 2 is the import step (only relevant for Google; still shown for all)
-  const WIZARD_STEPS = ["Provider & Flow", "Import", "Configure", "Connect"];
+  const WIZARD_STEPS = [
+    { number: 1, label: "Provider & Flow" },
+    { number: 2, label: "Import" },
+    { number: 3, label: "Configure" },
+    { number: 4, label: "Connect" },
+  ] as const;
+
+  async function refreshLiveAccountState(
+    accountId: string,
+    options?: { preserveValidStatus?: boolean },
+  ) {
+    try {
+      const refreshed = await refetchOAuthProviders();
+      const account = refreshed.data?.accounts?.find((a) => a.id === accountId);
+      if (!account) return;
+
+      setLastSavedData((current) =>
+        current && current.id === account.id ? account : current,
+      );
+      setAutoRefreshInterval(account.auto_refresh_interval_minutes ?? null);
+      setLiveTokenStatus((currentStatus) => {
+        if (
+          options?.preserveValidStatus &&
+          currentStatus === "valid" &&
+          account.token_status === "expired"
+        ) {
+          return currentStatus;
+        }
+        return account.token_status;
+      });
+      setLiveTokenExpiresAt(account.token_expires_at);
+      setLiveLastValidatedAt(account.last_validated_at);
+      setLiveNextRefreshAt(account.next_refresh_at ?? null);
+      setLiveLastUsedAt(account.last_used_at);
+      setLiveCreatedAt(account.created_at);
+    } catch {
+      // Best-effort refresh for live status panel.
+    }
+  }
+
+  // Poll the backend for live token status updates while the modal is open.
+  // This ensures the token status display reflects background auto-refreshes.
+  const liveAccountId = isEditMode
+    ? (savedAccountId ?? initialData?.id ?? null)
+    : savedAccountId;
+
+  useEffect(() => {
+    if (!open || !liveAccountId) return;
+
+    // Determine polling interval: slightly faster than the auto-refresh interval
+    // so changes are visible promptly after they happen (min 30 s, max 60 s).
+    const intervalMs = autoRefreshInterval
+      ? Math.min(60_000, Math.max(30_000, autoRefreshInterval * 60_000 * 0.25))
+      : 60_000;
+
+    const timer = setInterval(() => {
+      refreshLiveAccountState(liveAccountId);
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, liveAccountId, autoRefreshInterval]);
 
   function goToNextStep() {
     if (step === 1) setStep(2);
@@ -771,7 +854,7 @@ export default function AddOAuthAccountModal({
     }
 
     if (isEditMode && initialData) {
-      const updatePayload: IOAuthAccountUpdate = {
+      const updatePayload: IOAuthProviderUpdate = {
         name: name.trim(),
         scopes: parsedScopes,
         auth_endpoint: authEndpoint || null,
@@ -796,7 +879,13 @@ export default function AddOAuthAccountModal({
             setRotationResult(null);
             setConnectStatus("idle");
             setConnectError(null);
+            setLiveTokenStatus(result.token_status);
+            setLiveTokenExpiresAt(result.token_expires_at);
+            setLiveLastValidatedAt(result.last_validated_at);
             setLiveNextRefreshAt(result.next_refresh_at ?? null);
+            setLiveLastUsedAt(result.last_used_at);
+            setLiveCreatedAt(result.created_at);
+            setManualRefreshState(null);
             onSuccess();
           },
           onError: (err: unknown) => {
@@ -834,6 +923,13 @@ export default function AddOAuthAccountModal({
             setValidationResult(null);
             setConnectStatus("idle");
             setConnectError(null);
+            setLiveTokenStatus(result.token_status);
+            setLiveTokenExpiresAt(result.token_expires_at);
+            setLiveLastValidatedAt(result.last_validated_at);
+            setLiveNextRefreshAt(result.next_refresh_at ?? null);
+            setLiveLastUsedAt(result.last_used_at);
+            setLiveCreatedAt(result.created_at);
+            setManualRefreshState(null);
             onSuccess();
             setStep(4);
           },
@@ -865,6 +961,9 @@ export default function AddOAuthAccountModal({
           setValidationResult(result);
           if (result.success) {
             setLiveLastValidatedAt(new Date().toISOString());
+            setLiveTokenStatus("valid");
+            setManualRefreshState(null);
+            void refreshLiveAccountState(accountId);
           }
         },
         onError: (err: unknown) => {
@@ -886,6 +985,8 @@ export default function AddOAuthAccountModal({
   function handleRotate() {
     const accountId = savedAccountId ?? initialData?.id;
     if (!accountId) return;
+    const previousStatus = liveTokenStatus;
+    const previousExpiresAt = liveTokenExpiresAt;
     setRotationResult(null);
     rotateAccount(
       { accountId },
@@ -895,7 +996,10 @@ export default function AddOAuthAccountModal({
           if (result.success) {
             const newExpiresAt = result.token_expires_at ?? null;
             setLiveTokenExpiresAt(newExpiresAt);
-            setLiveTokenStatus(computeTokenStatus(newExpiresAt));
+            // Rotation succeeded → token is valid regardless of the returned expiry value.
+            // computeTokenStatus can misreport "expired" when the backend returns a
+            // past-looking timestamp (e.g. service accounts without a real TTL).
+            setLiveTokenStatus("valid");
             // Recompute next refresh if interval is set
             if (autoRefreshInterval) {
               setLiveNextRefreshAt(
@@ -904,6 +1008,17 @@ export default function AddOAuthAccountModal({
                 ).toISOString(),
               );
             }
+            setLiveLastValidatedAt(new Date().toISOString());
+            setManualRefreshState({
+              refreshedAt: new Date().toISOString(),
+              previousStatus,
+              previousExpiresAt,
+              newExpiresAt,
+              message: result.message,
+            });
+            void refreshLiveAccountState(accountId, {
+              preserveValidStatus: true,
+            });
             onSuccess();
           }
         },
@@ -985,6 +1100,7 @@ export default function AddOAuthAccountModal({
     savedAccountId ?? (isEditMode ? initialData?.id : null);
   const connectTargetId =
     savedAccountId ?? (isEditMode ? initialData?.id : null);
+  const hasRecentlyRefreshed = !!manualRefreshState;
 
   // -----------------------------------------------------------------------
   // Shared: connect + validate panels (used in both edit and create step 3)
@@ -1151,10 +1267,10 @@ export default function AddOAuthAccountModal({
               Object.keys(validationResult.details).length > 0 && (
                 <pre
                   className={cn(
-                    "mt-1.5 overflow-x-auto rounded p-1 font-mono text-xs",
+                    "mt-1.5 overflow-x-auto rounded border p-1 font-mono text-xs",
                     validationResult.success
-                      ? "bg-green-100 text-green-900 dark:bg-green-900/50 dark:text-green-100"
-                      : "bg-red-100 text-red-900 dark:bg-red-900/50 dark:text-red-100",
+                      ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
+                      : "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300",
                   )}
                 >
                   {JSON.stringify(validationResult.details, null, 2)}
@@ -1255,6 +1371,14 @@ export default function AddOAuthAccountModal({
             </DialogDescription>
           </DialogHeader>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleJsonFileChange}
+          />
+
           <Tabs
             value={editTab}
             onValueChange={(v) =>
@@ -1270,7 +1394,6 @@ export default function AddOAuthAccountModal({
             {/* ── Settings Tab ── */}
             <TabsContent value="settings">
               <div className="flex flex-col gap-4 py-2">
-                {/* JSON file import (edit mode) */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
                     <Label className="text-xs text-muted-foreground">
@@ -1294,16 +1417,8 @@ export default function AddOAuthAccountModal({
                     Accepts Google <code>client_secret_*.json</code> or{" "}
                     <code>service_account.json</code> — overwrites fields below.
                   </p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".json,application/json"
-                    className="hidden"
-                    onChange={handleJsonFileChange}
-                  />
                 </div>
 
-                {/* Name */}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="oauth-name-edit">
                     Name <span className="text-destructive">*</span>
@@ -1316,14 +1431,14 @@ export default function AddOAuthAccountModal({
                   />
                 </div>
 
-                {/* Provider & Flow (read-only in edit) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs text-muted-foreground">
                       Provider
                     </Label>
                     <p className="text-sm font-medium">
-                      {PROVIDER_LABELS[providerId] ?? providerId}
+                      {PROVIDER_LABELS[providerId as SupportedProviderId] ??
+                        providerId}
                     </p>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -1339,7 +1454,6 @@ export default function AddOAuthAccountModal({
                   </div>
                 </div>
 
-                {/* Provider hint */}
                 {hint && (
                   <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
                     <ForwardedIconComponent
@@ -1350,7 +1464,6 @@ export default function AddOAuthAccountModal({
                   </div>
                 )}
 
-                {/* Credentials form */}
                 <CredentialsForm
                   isEditMode={true}
                   flowType={flowType}
@@ -1370,7 +1483,6 @@ export default function AddOAuthAccountModal({
                   setUserinfoEndpoint={setUserinfoEndpoint}
                 />
 
-                {/* Auto-refresh interval */}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="oauth-auto-refresh">
                     Auto-refresh interval
@@ -1380,11 +1492,11 @@ export default function AddOAuthAccountModal({
                       value={
                         autoRefreshInterval === null
                           ? "disabled"
-                          : String(autoRefreshInterval)
+                          : String(autoRefreshInterval * 60)
                       }
                       onValueChange={(v) =>
                         setAutoRefreshInterval(
-                          v === "disabled" ? null : Number(v),
+                          v === "disabled" ? null : Math.ceil(Number(v) / 60),
                         )
                       }
                     >
@@ -1393,18 +1505,18 @@ export default function AddOAuthAccountModal({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="disabled">Disabled</SelectItem>
-                        <SelectItem value="15">Every 15 minutes</SelectItem>
-                        <SelectItem value="30">Every 30 minutes</SelectItem>
-                        <SelectItem value="60">Every hour</SelectItem>
-                        <SelectItem value="360">Every 6 hours</SelectItem>
-                        <SelectItem value="720">Every 12 hours</SelectItem>
-                        <SelectItem value="1440">Every 24 hours</SelectItem>
+                        {OAUTH_AUTO_REFRESH_INTERVAL_SECONDS.map((sec) => (
+                          <SelectItem key={sec} value={String(sec)}>
+                            {formatOAuthAutoRefreshLabel(sec / 60)}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     Langflow will automatically rotate tokens in the background
-                    at this interval.
+                    at this interval. Stored values are rounded to whole
+                    minutes.
                   </p>
                 </div>
               </div>
@@ -1413,127 +1525,161 @@ export default function AddOAuthAccountModal({
             {/* ── Connection Tab ── */}
             <TabsContent value="connection">
               <div className="flex flex-col gap-4 py-2">
-                {/* Token status summary — uses live state so it updates after rotate/validate */}
                 {initialData && (
-                  <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                       Token Status
                     </p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      {/* Status badge */}
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      <div className="flex flex-col gap-0">
+                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
                           Status
                         </span>
                         <span
                           className={cn(
-                            "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                            liveTokenStatus === "valid"
+                            "inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 py-0 text-[11px] font-medium",
+                            hasRecentlyRefreshed
                               ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                              : liveTokenStatus === "expired"
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                                : "bg-muted text-muted-foreground",
+                              : liveTokenStatus === "valid"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                : liveTokenStatus === "expired"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-muted text-muted-foreground",
                           )}
                         >
                           <ForwardedIconComponent
                             name={
-                              liveTokenStatus === "valid"
+                              hasRecentlyRefreshed
                                 ? "CheckCircle"
-                                : liveTokenStatus === "expired"
-                                  ? "AlertCircle"
-                                  : "MinusCircle"
+                                : liveTokenStatus === "valid"
+                                  ? "CheckCircle"
+                                  : liveTokenStatus === "expired"
+                                    ? "AlertCircle"
+                                    : "MinusCircle"
                             }
-                            className="h-3 w-3"
+                            className="h-2.5 w-2.5"
                           />
-                          {liveTokenStatus === "valid"
-                            ? "Valid"
-                            : liveTokenStatus === "expired"
-                              ? "Expired"
-                              : liveTokenStatus === "not_connected"
-                                ? "Not connected"
-                                : "Unknown"}
+                          {hasRecentlyRefreshed
+                            ? "Active"
+                            : liveTokenStatus === "valid"
+                              ? "Active"
+                              : liveTokenStatus === "expired"
+                                ? "Expired"
+                                : liveTokenStatus === "not_connected"
+                                  ? "Not connected"
+                                  : "Unknown"}
                         </span>
                       </div>
 
-                      {/* Expires at */}
+                      {manualRefreshState && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Previous status
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 py-0 text-[11px] font-medium",
+                              manualRefreshState.previousStatus === "valid"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                : manualRefreshState.previousStatus ===
+                                    "expired"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            <ForwardedIconComponent
+                              name={
+                                manualRefreshState.previousStatus === "valid"
+                                  ? "CheckCircle"
+                                  : manualRefreshState.previousStatus ===
+                                      "expired"
+                                    ? "AlertCircle"
+                                    : "MinusCircle"
+                              }
+                              className="h-2.5 w-2.5"
+                            />
+                            {manualRefreshState.previousStatus === "valid"
+                              ? "Active"
+                              : manualRefreshState.previousStatus === "expired"
+                                ? "Expired"
+                                : manualRefreshState.previousStatus ===
+                                    "not_connected"
+                                  ? "Not connected"
+                                  : "Unknown"}
+                          </span>
+                        </div>
+                      )}
+
                       {liveTokenExpiresAt && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
                             Expires
                           </span>
-                          <span className="text-xs text-foreground">
+                          <span className="text-[11px] text-foreground">
                             {new Date(liveTokenExpiresAt).toLocaleString()}
                           </span>
                         </div>
                       )}
 
-                      {/* Last validated */}
-                      {liveLastValidatedAt && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Last validated
+                      {manualRefreshState?.previousExpiresAt && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Previous expiry
                           </span>
-                          <span className="text-xs text-foreground">
-                            {new Date(liveLastValidatedAt).toLocaleString()}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Last used */}
-                      {initialData.last_used_at && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Last used
-                          </span>
-                          <span className="text-xs text-foreground">
+                          <span className="text-[11px] text-foreground">
                             {new Date(
-                              initialData.last_used_at,
+                              manualRefreshState.previousExpiresAt,
                             ).toLocaleString()}
                           </span>
                         </div>
                       )}
 
-                      {/* Next auto-refresh */}
-                      {liveNextRefreshAt && (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                            Next auto-refresh
+                      {manualRefreshState && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Refreshed at
                           </span>
-                          <span
-                            className={cn(
-                              "text-xs",
-                              new Date(liveNextRefreshAt) < new Date()
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-foreground",
-                            )}
-                          >
-                            {new Date(liveNextRefreshAt) < new Date()
-                              ? "Scheduled (pending)"
-                              : new Date(liveNextRefreshAt).toLocaleString()}
+                          <span className="text-[11px] text-foreground">
+                            {new Date(
+                              manualRefreshState.refreshedAt,
+                            ).toLocaleString()}
                           </span>
                         </div>
                       )}
 
-                      {/* Connected since */}
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                          Created
+                      <div className="flex flex-col gap-0">
+                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                          {autoRefreshInterval
+                            ? "Next auto-refresh"
+                            : "Auto-refresh"}
                         </span>
-                        <span className="text-xs text-foreground">
-                          {new Date(initialData.created_at).toLocaleString()}
+                        <span
+                          className={cn(
+                            "text-[11px]",
+                            autoRefreshInterval &&
+                              liveNextRefreshAt &&
+                              new Date(liveNextRefreshAt) < new Date()
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-foreground",
+                          )}
+                        >
+                          {!autoRefreshInterval
+                            ? "Auto-refresh disabled"
+                            : liveNextRefreshAt
+                              ? new Date(liveNextRefreshAt) < new Date()
+                                ? new Date(liveNextRefreshAt!).toLocaleString()
+                                : new Date(liveNextRefreshAt).toLocaleString()
+                              : formatOAuthAutoRefreshLabel(
+                                  autoRefreshInterval,
+                                )}
                         </span>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Connect section for auth_code */}
                 {renderConnectSection()}
-
-                {/* Test connection */}
                 {renderValidateSection()}
-
-                {/* Rotate / refresh tokens */}
                 {renderRotateSection()}
 
                 {!connectTargetId && !validateTargetId && (
@@ -1585,22 +1731,15 @@ export default function AddOAuthAccountModal({
   // -----------------------------------------------------------------------
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ForwardedIconComponent name="KeyRound" className="h-5 w-5" />
-            Add OAuth Account
-          </DialogTitle>
-          <DialogDescription asChild>
-            <div>
-              <StepIndicator
-                step={step}
-                steps={WIZARD_STEPS}
-                onStepClick={(s) => setStep(s as 1 | 2 | 3 | 4)}
-              />
-            </div>
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        className="flex h-[85vh] w-[700px] !max-w-none flex-col gap-0 overflow-hidden border-none bg-transparent p-0 shadow-none"
+        hideCloseButton
+        overlayClassName="bg-black/30 dark:bg-black/50 backdrop-blur"
+      >
+        <DialogTitle className="sr-only">Add OAuth Account</DialogTitle>
+        <DialogDescription className="sr-only">
+          Step {step} of {WIZARD_STEPS.length}
+        </DialogDescription>
 
         {/* Hidden file input (used across steps) */}
         <input
@@ -1611,408 +1750,427 @@ export default function AddOAuthAccountModal({
           onChange={handleJsonFileChange}
         />
 
-        {/* ── Step 1: Provider & Flow Type ── */}
-        {step === 1 && (
-          <div className="flex flex-col gap-5 py-2">
-            <div className="flex flex-col gap-2">
-              <Label className="text-sm font-medium">Provider</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {providers.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setProviderId(p.id)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
-                      providerId === p.id
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border hover:border-muted-foreground/40 hover:bg-muted/40",
-                    )}
-                  >
-                    <ForwardedIconComponent
-                      name={p.icon}
-                      className="h-4 w-4 shrink-0"
-                    />
-                    <span className="truncate">{p.display_name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* Title + Stepper */}
+        <div className="flex flex-col gap-4 px-6 pt-6">
+          <h2
+            className="text-center text-2xl font-semibold"
+            data-testid="stepper-modal-title"
+          >
+            Add OAuth Account
+          </h2>
+          <OAuthStepper steps={WIZARD_STEPS} activeStep={step} />
+        </div>
 
-            <div className="flex flex-col gap-2">
-              <Label className="text-sm font-medium">Flow Type</Label>
-              <div className="flex flex-col gap-2">
-                {FLOW_TYPE_OPTIONS.filter((f) =>
-                  supportedFlows.includes(f.value),
-                ).map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => setFlowType(f.value)}
-                    className={cn(
-                      "flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-colors",
-                      flowType === f.value
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-muted-foreground/40 hover:bg-muted/40",
-                    )}
-                  >
-                    <span className="text-sm font-medium">{f.label}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {FLOW_TYPE_DESCRIPTIONS[f.value]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {selectedProvider?.docs_url && (
-              <a
-                href={selectedProvider.docs_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
-              >
-                <ForwardedIconComponent
-                  name="ExternalLink"
-                  className="h-3 w-3"
-                />
-                {selectedProvider.display_name} OAuth2 documentation
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* ── Step 2: Import ── */}
-        {step === 2 && (
-          <div className="flex flex-col gap-4 py-2">
-            {/* Console hints for auth_code — show before importing */}
-            {isAuthCodeFlow && (
-              <div className="rounded-md border bg-muted/30 p-3 text-xs shadow-sm dark:bg-muted/15">
-                <p className="mb-2 font-medium text-foreground">
-                  Register this callback URL in your OAuth console first
-                </p>
+        {/* Content box */}
+        <div className="mx-4 mb-4 mt-4 flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-background">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-2">
+            {/* ── Step 1: Provider & Flow Type ── */}
+            {step === 1 && (
+              <div className="flex flex-col gap-5 py-2">
                 <div className="flex flex-col gap-2">
-                  {oauthConsoleHints.redirectUriCandidates.map((uri) => (
-                    <OAuthCopyRow
-                      key={uri}
-                      label="Authorized redirect URI"
-                      value={uri}
-                      onCopied={(t) =>
-                        copyConsoleValue(t, "Authorized redirect URI")
-                      }
-                    />
-                  ))}
-                  <OAuthCopyRow
-                    label="Authorized JavaScript origin"
-                    value={oauthConsoleHints.authorizedJavaScriptOrigin}
-                    onCopied={(t) =>
-                      copyConsoleValue(t, "Authorized JavaScript origin")
-                    }
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">
-                Optionally import a JSON credentials file to auto-fill the form,
-                or skip ahead and enter your credentials manually.
-              </p>
-
-              {/* Upload card */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors hover:border-primary hover:bg-primary/5"
-              >
-                <ForwardedIconComponent
-                  name="Upload"
-                  className="h-8 w-8 text-muted-foreground"
-                />
-                <div>
-                  <p className="font-medium text-foreground">
-                    Upload JSON file
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Google <code>client_secret_*.json</code> /{" "}
-                    <code>service_account.json</code>
-                  </p>
-                </div>
-              </button>
-
-              <p className="text-center text-xs text-muted-foreground">
-                Uploading auto-fills all fields and advances to the next step.
-                Use <strong>Next</strong> below to enter credentials manually.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 3: Configure ── */}
-        {step === 3 && (
-          <div className="flex flex-col gap-4 py-2">
-            {/* Name */}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="oauth-name-create">
-                Name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="oauth-name-create"
-                placeholder="e.g. My Google Cloud Project"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-
-            {/* Provider hint */}
-            {hint && (
-              <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                <ForwardedIconComponent
-                  name="Info"
-                  className="mb-0.5 mr-1 inline h-3.5 w-3.5"
-                />
-                {hint}
-              </div>
-            )}
-
-            {/* Credentials form */}
-            <CredentialsForm
-              isEditMode={false}
-              flowType={flowType}
-              clientId={clientId}
-              setClientId={setClientId}
-              clientSecret={clientSecret}
-              setClientSecret={setClientSecret}
-              extraData={extraData}
-              setExtraData={setExtraData}
-              scopes={scopes}
-              setScopes={setScopes}
-              authEndpoint={authEndpoint}
-              setAuthEndpoint={setAuthEndpoint}
-              tokenEndpoint={tokenEndpoint}
-              setTokenEndpoint={setTokenEndpoint}
-              userinfoEndpoint={userinfoEndpoint}
-              setUserinfoEndpoint={setUserinfoEndpoint}
-            />
-          </div>
-        )}
-
-        {/* ── Step 4: Connect ── */}
-        {step === 4 && (
-          <div className="flex flex-col gap-4 py-2">
-            {/* Token status summary */}
-            {lastSavedData && (
-              <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Token Status
-                </p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Status
-                    </span>
-                    <span
-                      className={cn(
-                        "inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                        liveTokenStatus === "valid"
-                          ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                          : liveTokenStatus === "expired"
-                            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                            : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      <ForwardedIconComponent
-                        name={
-                          liveTokenStatus === "valid"
-                            ? "CheckCircle"
-                            : liveTokenStatus === "expired"
-                              ? "AlertCircle"
-                              : "MinusCircle"
-                        }
-                        className="h-3 w-3"
-                      />
-                      {liveTokenStatus === "valid"
-                        ? "Valid"
-                        : liveTokenStatus === "expired"
-                          ? "Expired"
-                          : liveTokenStatus === "not_connected"
-                            ? "Not connected"
-                            : "Unknown"}
-                    </span>
-                  </div>
-
-                  {liveTokenExpiresAt && (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Expires
-                      </span>
-                      <span className="text-xs text-foreground">
-                        {new Date(liveTokenExpiresAt).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-
-                  {liveLastValidatedAt && (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Last validated
-                      </span>
-                      <span className="text-xs text-foreground">
-                        {new Date(liveLastValidatedAt).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-
-                  {lastSavedData.last_used_at && (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Last used
-                      </span>
-                      <span className="text-xs text-foreground">
-                        {new Date(lastSavedData.last_used_at).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-
-                  {liveNextRefreshAt && (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Next auto-refresh
-                      </span>
-                      <span
+                  <Label className="text-sm font-medium">Provider</Label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {providers.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setProviderId(p.id)}
                         className={cn(
-                          "text-xs",
-                          new Date(liveNextRefreshAt) < new Date()
-                            ? "text-amber-600 dark:text-amber-400"
-                            : "text-foreground",
+                          "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
+                          providerId === p.id
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border hover:border-muted-foreground/40 hover:bg-muted/40",
                         )}
                       >
-                        {new Date(liveNextRefreshAt) < new Date()
-                          ? "Scheduled (pending)"
-                          : new Date(liveNextRefreshAt).toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      Created
-                    </span>
-                    <span className="text-xs text-foreground">
-                      {new Date(lastSavedData.created_at).toLocaleString()}
-                    </span>
+                        <ForwardedIconComponent
+                          name={p.icon}
+                          className="h-4 w-4 shrink-0"
+                        />
+                        <span className="truncate">{p.display_name}</span>
+                      </button>
+                    ))}
                   </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-sm font-medium">Flow Type</Label>
+                  <div className="flex flex-col gap-2">
+                    {FLOW_TYPE_OPTIONS.filter((f) =>
+                      supportedFlows.includes(f.value),
+                    ).map((f) => (
+                      <button
+                        key={f.value}
+                        type="button"
+                        onClick={() => setFlowType(f.value)}
+                        className={cn(
+                          "flex flex-col items-start rounded-lg border px-3 py-2.5 text-left transition-colors",
+                          flowType === f.value
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-muted-foreground/40 hover:bg-muted/40",
+                        )}
+                      >
+                        <span className="text-sm font-medium">{f.label}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {FLOW_TYPE_DESCRIPTIONS[f.value]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {selectedProvider?.docs_url && (
+                  <a
+                    href={selectedProvider.docs_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  >
+                    <ForwardedIconComponent
+                      name="ExternalLink"
+                      className="h-3 w-3"
+                    />
+                    {selectedProvider.display_name} OAuth2 documentation
+                  </a>
+                )}
+              </div>
+            )}
+
+            {/* ── Step 2: Import ── */}
+            {step === 2 && (
+              <div className="flex flex-col gap-4 py-2">
+                {isAuthCodeFlow && (
+                  <div className="rounded-md border bg-muted/30 p-3 text-xs shadow-sm dark:bg-muted/15">
+                    <p className="mb-2 font-medium text-foreground">
+                      Register this callback URL in your OAuth console first
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {oauthConsoleHints.redirectUriCandidates.map((uri) => (
+                        <OAuthCopyRow
+                          key={uri}
+                          label="Authorized redirect URI"
+                          value={uri}
+                          onCopied={(t) =>
+                            copyConsoleValue(t, "Authorized redirect URI")
+                          }
+                        />
+                      ))}
+                      <OAuthCopyRow
+                        label="Authorized JavaScript origin"
+                        value={oauthConsoleHints.authorizedJavaScriptOrigin}
+                        onCopied={(t) =>
+                          copyConsoleValue(t, "Authorized JavaScript origin")
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Optionally import a JSON credentials file to auto-fill the
+                    form, or skip ahead and enter your credentials manually.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors hover:border-primary hover:bg-primary/5"
+                  >
+                    <ForwardedIconComponent
+                      name="Upload"
+                      className="h-8 w-8 text-muted-foreground"
+                    />
+                    <div>
+                      <p className="font-medium text-foreground">
+                        Upload JSON file
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        Google <code>client_secret_*.json</code> /{" "}
+                        <code>service_account.json</code>
+                      </p>
+                    </div>
+                  </button>
+
+                  <p className="text-center text-xs text-muted-foreground">
+                    Uploading auto-fills all fields and advances to the next
+                    step. Use <strong>Next</strong> below to enter credentials
+                    manually.
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* Connect section for auth_code */}
-            {renderConnectSection()}
+            {/* ── Step 3: Configure ── */}
+            {step === 3 && (
+              <div className="flex flex-col gap-4 py-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="oauth-name-create">
+                    Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="oauth-name-create"
+                    placeholder="e.g. My Google Cloud Project"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
 
-            {/* Test connection */}
-            {renderValidateSection()}
+                {hint && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                    <ForwardedIconComponent
+                      name="Info"
+                      className="mb-0.5 mr-1 inline h-3.5 w-3.5"
+                    />
+                    {hint}
+                  </div>
+                )}
 
-            {/* Rotate / refresh tokens */}
-            {renderRotateSection()}
+                <CredentialsForm
+                  isEditMode={false}
+                  flowType={flowType}
+                  clientId={clientId}
+                  setClientId={setClientId}
+                  clientSecret={clientSecret}
+                  setClientSecret={setClientSecret}
+                  extraData={extraData}
+                  setExtraData={setExtraData}
+                  scopes={scopes}
+                  setScopes={setScopes}
+                  authEndpoint={authEndpoint}
+                  setAuthEndpoint={setAuthEndpoint}
+                  tokenEndpoint={tokenEndpoint}
+                  setTokenEndpoint={setTokenEndpoint}
+                  userinfoEndpoint={userinfoEndpoint}
+                  setUserinfoEndpoint={setUserinfoEndpoint}
+                />
+              </div>
+            )}
 
-            {!connectTargetId && !validateTargetId && (
-              <p className="text-sm text-muted-foreground">
-                Save the account first to enable connection testing.
-              </p>
+            {/* ── Step 4: Connect ── */}
+            {step === 4 && (
+              <div className="flex flex-col gap-4 py-2">
+                {lastSavedData && (
+                  <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Token Status
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                      <div className="flex flex-col gap-0">
+                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                          Status
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 py-0 text-[11px] font-medium",
+                            hasRecentlyRefreshed
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                              : liveTokenStatus === "valid"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                : liveTokenStatus === "expired"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          <ForwardedIconComponent
+                            name={
+                              hasRecentlyRefreshed
+                                ? "CheckCircle"
+                                : liveTokenStatus === "valid"
+                                  ? "CheckCircle"
+                                  : liveTokenStatus === "expired"
+                                    ? "AlertCircle"
+                                    : "MinusCircle"
+                            }
+                            className="h-2.5 w-2.5"
+                          />
+                          {hasRecentlyRefreshed
+                            ? "Active"
+                            : liveTokenStatus === "valid"
+                              ? "Active"
+                              : liveTokenStatus === "expired"
+                                ? "Expired"
+                                : liveTokenStatus === "not_connected"
+                                  ? "Not connected"
+                                  : "Unknown"}
+                        </span>
+                      </div>
+
+                      {manualRefreshState && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Previous status
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 py-0 text-[11px] font-medium",
+                              manualRefreshState.previousStatus === "valid"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                                : manualRefreshState.previousStatus ===
+                                    "expired"
+                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                                  : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            <ForwardedIconComponent
+                              name={
+                                manualRefreshState.previousStatus === "valid"
+                                  ? "CheckCircle"
+                                  : manualRefreshState.previousStatus ===
+                                      "expired"
+                                    ? "AlertCircle"
+                                    : "MinusCircle"
+                              }
+                              className="h-2.5 w-2.5"
+                            />
+                            {manualRefreshState.previousStatus === "valid"
+                              ? "Active"
+                              : manualRefreshState.previousStatus === "expired"
+                                ? "Expired"
+                                : manualRefreshState.previousStatus ===
+                                    "not_connected"
+                                  ? "Not connected"
+                                  : "Unknown"}
+                          </span>
+                        </div>
+                      )}
+
+                      {liveTokenExpiresAt && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Expires
+                          </span>
+                          <span className="text-[11px] text-foreground">
+                            {new Date(liveTokenExpiresAt).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+
+                      {manualRefreshState?.previousExpiresAt && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Previous expiry
+                          </span>
+                          <span className="text-[11px] text-foreground">
+                            {new Date(
+                              manualRefreshState.previousExpiresAt,
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+
+                      {manualRefreshState && (
+                        <div className="flex flex-col gap-0">
+                          <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                            Refreshed at
+                          </span>
+                          <span className="text-[11px] text-foreground">
+                            {new Date(
+                              manualRefreshState.refreshedAt,
+                            ).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col gap-0">
+                        <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                          {autoRefreshInterval
+                            ? "Next auto-refresh"
+                            : "Auto-refresh"}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[11px]",
+                            autoRefreshInterval &&
+                              liveNextRefreshAt &&
+                              new Date(liveNextRefreshAt) < new Date()
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-foreground",
+                          )}
+                        >
+                          {!autoRefreshInterval
+                            ? "Auto-refresh disabled"
+                            : liveNextRefreshAt
+                              ? new Date(liveNextRefreshAt) < new Date()
+                                ? `Scheduled for ${new Date(
+                                    liveNextRefreshAt,
+                                  ).toLocaleString()} (pending)`
+                                : new Date(liveNextRefreshAt).toLocaleString()
+                              : formatOAuthAutoRefreshLabel(
+                                  autoRefreshInterval,
+                                )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {renderConnectSection()}
+                {renderValidateSection()}
+                {renderRotateSection()}
+
+                {!connectTargetId && !validateTargetId && (
+                  <p className="text-sm text-muted-foreground">
+                    Save the account first to enable connection testing.
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
 
-        {/* ── Footer ── */}
-        <DialogFooter>
-          {step === 1 && (
-            <>
-              <Button variant="outline" onClick={onClose}>
+          {/* Footer */}
+          <div className="flex items-center justify-between border-t border-border px-6 py-4">
+            {step === 4 ? (
+              <div />
+            ) : (
+              <Button variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={goToNextStep}>
-                Next
-                <ForwardedIconComponent
-                  name="ChevronRight"
-                  className="ml-1 h-4 w-4"
-                />
-              </Button>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <Button variant="outline" onClick={goToPrevStep}>
-                <ForwardedIconComponent
-                  name="ChevronLeft"
-                  className="mr-1 h-4 w-4"
-                />
-                Back
-              </Button>
-              <Button variant="primary" onClick={goToNextStep}>
-                Next
-                <ForwardedIconComponent
-                  name="ChevronRight"
-                  className="ml-1 h-4 w-4"
-                />
-              </Button>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <Button
-                variant="outline"
-                onClick={goToPrevStep}
-                disabled={isPending}
-              >
-                <ForwardedIconComponent
-                  name="ChevronLeft"
-                  className="mr-1 h-4 w-4"
-                />
-                Back
-              </Button>
-              {savedAccountId ? (
-                <Button variant="primary" onClick={goToNextStep}>
-                  Next
-                  <ForwardedIconComponent
-                    name="ChevronRight"
-                    className="ml-1 h-4 w-4"
-                  />
-                </Button>
-              ) : (
+            )}
+            <div className="flex items-center gap-3">
+              {step > 1 && (
                 <Button
-                  variant="primary"
-                  onClick={handleSubmit}
+                  variant="outline"
+                  onClick={goToPrevStep}
                   disabled={isPending}
                 >
-                  {isPending && (
-                    <ForwardedIconComponent
-                      name="Loader"
-                      className="mr-1 h-4 w-4 animate-spin"
-                    />
-                  )}
-                  Save & Connect
+                  Back
                 </Button>
               )}
-            </>
-          )}
-
-          {step === 4 && (
-            <>
-              <Button variant="outline" onClick={goToPrevStep}>
-                <ForwardedIconComponent
-                  name="ChevronLeft"
-                  className="mr-1 h-4 w-4"
-                />
-                Back
-              </Button>
-              <Button variant="outline" onClick={onClose}>
-                Done
-              </Button>
-            </>
-          )}
-        </DialogFooter>
+              {(step === 1 || step === 2) && (
+                <Button onClick={goToNextStep} data-testid="oauth-stepper-next">
+                  Next
+                </Button>
+              )}
+              {step === 3 && (
+                <>
+                  {savedAccountId ? (
+                    <Button
+                      onClick={goToNextStep}
+                      data-testid="oauth-stepper-next"
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isPending}
+                      data-testid="oauth-stepper-next"
+                    >
+                      {isPending && (
+                        <ForwardedIconComponent
+                          name="Loader"
+                          className="h-4 w-4 animate-spin"
+                        />
+                      )}
+                      Save & Connect
+                    </Button>
+                  )}
+                </>
+              )}
+              {step === 4 && <Button onClick={onClose}>Done</Button>}
+            </div>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

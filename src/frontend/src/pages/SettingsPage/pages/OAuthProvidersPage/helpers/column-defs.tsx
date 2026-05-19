@@ -1,17 +1,17 @@
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Badge } from "@/components/ui/badge";
-import type { IOAuthAccountRead } from "@/controllers/API/queries/oauth-accounts";
+import type { IOAuthProviderRead } from "@/controllers/API/queries/oauth-providers";
 
 const TOKEN_STATUS_CONFIG: Record<
   string,
   {
     label: string;
-    variant: "default" | "secondary" | "destructive" | "outline";
+    variant: "successStatic" | "secondary" | "destructive" | "outline";
     icon: string;
   }
 > = {
-  valid: { label: "Valid", variant: "default", icon: "CheckCircle" },
+  valid: { label: "Valid", variant: "successStatic", icon: "CheckCircle" },
   expired: { label: "Expired", variant: "destructive", icon: "AlertCircle" },
   not_connected: {
     label: "Not connected",
@@ -31,14 +31,17 @@ const FLOW_TYPE_LABELS: Record<string, string> = {
 function TokenStatusCell({ value }: { value: string }) {
   const cfg = TOKEN_STATUS_CONFIG[value] ?? TOKEN_STATUS_CONFIG.unknown;
   return (
-    <Badge variant={cfg.variant} className="flex items-center gap-1 text-xs">
+    <Badge
+      variant={cfg.variant}
+      className="inline-flex w-fit items-center gap-1 text-xs"
+    >
       <ForwardedIconComponent name={cfg.icon} className="h-3 w-3" />
       {cfg.label}
     </Badge>
   );
 }
 
-export function getColumnDefs(): ColDef<IOAuthAccountRead>[] {
+export function getColumnDefs(): ColDef<IOAuthProviderRead>[] {
   return [
     {
       headerCheckboxSelection: true,

@@ -1,17 +1,17 @@
 import ForwardedIconComponent from "@/components/common/genericIconComponent";
 import { Button } from "@/components/ui/button";
 
-type OAuthAccountHeaderProps = {
+type OAuthProviderHeaderProps = {
   selectedRows: string[];
   onAdd: () => void;
   onDelete: () => void;
 };
 
-export default function OAuthAccountHeader({
+export default function OAuthProviderHeader({
   selectedRows,
   onAdd,
   onDelete,
-}: OAuthAccountHeaderProps) {
+}: OAuthProviderHeaderProps) {
   return (
     <div className="flex w-full items-start justify-between gap-6">
       <div className="flex w-full flex-col">

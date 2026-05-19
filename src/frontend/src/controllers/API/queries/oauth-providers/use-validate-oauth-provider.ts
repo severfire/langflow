@@ -9,24 +9,24 @@ export interface IValidateConnectionResponse {
   details?: Record<string, unknown> | null;
 }
 
-interface IValidateOAuthAccount {
+interface IValidateOAuthProvider {
   accountId: string;
 }
 
-export const useValidateOAuthAccount: useMutationFunctionType<
+export const useValidateOAuthProvider: useMutationFunctionType<
   undefined,
-  IValidateOAuthAccount
+  IValidateOAuthProvider
 > = (options) => {
   const { mutate } = UseRequestProcessor();
 
-  const validateOAuthAccountFn = async (
-    payload: IValidateOAuthAccount,
+  const validateOAuthProviderFn = async (
+    payload: IValidateOAuthProvider,
   ): Promise<IValidateConnectionResponse> => {
     const res = await api.post<IValidateConnectionResponse>(
-      `${getURL("OAUTH_ACCOUNTS")}/${payload.accountId}/validate`,
+      `${getURL("OAUTH_PROVIDERS")}/${payload.accountId}/validate`,
     );
     return res.data;
   };
 
-  return mutate(["useValidateOAuthAccount"], validateOAuthAccountFn, options);
+  return mutate(["useValidateOAuthProvider"], validateOAuthProviderFn, options);
 };

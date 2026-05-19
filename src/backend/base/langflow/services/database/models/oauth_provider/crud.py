@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 from sqlmodel import select
 
 from langflow.services.auth import utils as auth_utils
-from langflow.services.database.models.oauth_account.model import (
+from langflow.services.database.models.oauth_provider.model import (
     OAuthAccount,
-    OAuthAccountCreate,
-    OAuthAccountRead,
-    OAuthAccountUpdate,
+    OAuthProviderCreate,
+    OAuthProviderRead,
+    OAuthProviderUpdate,
 )
 
 if TYPE_CHECKING:
@@ -29,35 +29,30 @@ def _decrypt(value: str | None) -> str | None:
         return None
     try:
         result = auth_utils.decrypt_api_key(value)
-        # decrypt_api_key returns "" when the key cannot be decrypted (wrong
-        # SECRET_KEY, corrupted data, etc.).  Returning the raw encrypted blob
-        # in that case would cause callers to send a Fernet ciphertext string
-        # as an API credential, resulting in opaque 401/403 errors from remote
-        # providers.  Return None so callers can detect the failure explicitly.
     except Exception:  # noqa: BLE001
         return None
     else:
         return result or None
 
 
-async def list_oauth_accounts(session: AsyncSession, user_id: UUID) -> list[OAuthAccountRead]:
+async def list_oauth_providers(session: AsyncSession, user_id: UUID) -> list[OAuthProviderRead]:
     query = select(OAuthAccount).where(OAuthAccount.user_id == user_id, OAuthAccount.is_active.is_(True))
     accounts = (await session.exec(query)).all()
-    return [OAuthAccountRead.from_orm(a) for a in accounts]
+    return [OAuthProviderRead.from_orm(a) for a in accounts]
 
 
-async def get_oauth_account(session: AsyncSession, account_id: UUID, user_id: UUID) -> OAuthAccount | None:
+async def get_oauth_provider(session: AsyncSession, account_id: UUID, user_id: UUID) -> OAuthAccount | None:
     account = await session.get(OAuthAccount, account_id)
     if account is None or account.user_id != user_id:
         return None
     return account
 
 
-async def create_oauth_account(
+async def create_oauth_provider(
     session: AsyncSession,
-    payload: OAuthAccountCreate,
+    payload: OAuthProviderCreate,
     user_id: UUID,
-) -> OAuthAccountRead:
+) -> OAuthProviderRead:
     account = OAuthAccount(
         user_id=user_id,
         name=payload.name,
@@ -74,16 +69,16 @@ async def create_oauth_account(
     session.add(account)
     await session.flush()
     await session.refresh(account)
-    return OAuthAccountRead.from_orm(account)
+    return OAuthProviderRead.from_orm(account)
 
 
-async def update_oauth_account(
+async def update_oauth_provider(
     session: AsyncSession,
     account_id: UUID,
     user_id: UUID,
-    payload: OAuthAccountUpdate,
-) -> OAuthAccountRead | None:
-    account = await get_oauth_account(session, account_id, user_id)
+    payload: OAuthProviderUpdate,
+) -> OAuthProviderRead | None:
+    account = await get_oauth_provider(session, account_id, user_id)
     if account is None:
         return None
 
@@ -111,13 +106,13 @@ async def update_oauth_account(
     session.add(account)
     await session.flush()
     await session.refresh(account)
-    return OAuthAccountRead.from_orm(account)
+    return OAuthProviderRead.from_orm(account)
 
 
-async def delete_oauth_account(session: AsyncSession, account_id: UUID, user_id: UUID) -> None:
-    account = await get_oauth_account(session, account_id, user_id)
+async def delete_oauth_provider(session: AsyncSession, account_id: UUID, user_id: UUID) -> None:
+    account = await get_oauth_provider(session, account_id, user_id)
     if account is None:
-        msg = "OAuth account not found"
+        msg = "OAuth provider not found"
         raise ValueError(msg)
     await session.delete(account)
 
@@ -159,8 +154,8 @@ def decrypt_extra_data(account: OAuthAccount) -> str | None:
     return _decrypt(account.extra_data_enc)
 
 
-async def list_accounts_due_for_refresh(session: AsyncSession) -> list[OAuthAccount]:
-    """Return all active accounts whose auto-refresh interval has elapsed."""
+async def list_providers_due_for_refresh(session: AsyncSession) -> list[OAuthAccount]:
+    """Return all active providers whose auto-refresh interval has elapsed."""
     from datetime import datetime, timedelta, timezone
 
     now = datetime.now(timezone.utc)
@@ -178,7 +173,7 @@ async def list_accounts_due_for_refresh(session: AsyncSession) -> list[OAuthAcco
         if baseline is None:
             due.append(account)
             continue
-        from langflow.services.database.models.oauth_account.model import _ensure_utc
+        from langflow.services.database.models.oauth_provider.model import _ensure_utc
 
         if _ensure_utc(baseline) + interval <= now:
             due.append(account)

@@ -2,9 +2,9 @@ import type { useMutationFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type { IOAuthAccountRead } from "./use-get-oauth-accounts";
+import type { IOAuthProviderRead } from "./use-get-oauth-providers";
 
-export interface IOAuthAccountCreate {
+export interface IOAuthProviderCreate {
   name: string;
   provider: string;
   flow_type: string;
@@ -17,21 +17,21 @@ export interface IOAuthAccountCreate {
   extra_data?: string | null;
 }
 
-export const usePostOAuthAccount: useMutationFunctionType<
+export const usePostOAuthProvider: useMutationFunctionType<
   undefined,
-  IOAuthAccountCreate
+  IOAuthProviderCreate
 > = (options) => {
   const { mutate } = UseRequestProcessor();
 
-  const postOAuthAccountFn = async (
-    payload: IOAuthAccountCreate,
-  ): Promise<IOAuthAccountRead> => {
-    const res = await api.post<IOAuthAccountRead>(
-      `${getURL("OAUTH_ACCOUNTS")}/`,
+  const postOAuthProviderFn = async (
+    payload: IOAuthProviderCreate,
+  ): Promise<IOAuthProviderRead> => {
+    const res = await api.post<IOAuthProviderRead>(
+      `${getURL("OAUTH_PROVIDERS")}/`,
       payload,
     );
     return res.data;
   };
 
-  return mutate(["usePostOAuthAccount"], postOAuthAccountFn, options);
+  return mutate(["usePostOAuthProvider"], postOAuthProviderFn, options);
 };

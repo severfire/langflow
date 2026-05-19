@@ -3,7 +3,7 @@ import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
 
-export interface IOAuthAccountRead {
+export interface IOAuthProviderRead {
   id: string;
   user_id: string;
   name: string;
@@ -24,27 +24,27 @@ export interface IOAuthAccountRead {
   next_refresh_at: string | null;
 }
 
-export interface IOAuthAccountsListResponse {
+export interface IOAuthProvidersListResponse {
   total_count: number;
-  accounts: IOAuthAccountRead[];
+  accounts: IOAuthProviderRead[];
 }
 
-export const useGetOAuthAccountsQuery: useQueryFunctionType<
+export const useGetOAuthProvidersQuery: useQueryFunctionType<
   undefined,
-  IOAuthAccountsListResponse
+  IOAuthProvidersListResponse
 > = (options) => {
   const { query } = UseRequestProcessor();
 
-  const getOAuthAccountsFn = async () => {
-    return await api.get<IOAuthAccountsListResponse>(
-      `${getURL("OAUTH_ACCOUNTS")}/`,
+  const getOAuthProvidersFn = async () => {
+    return await api.get<IOAuthProvidersListResponse>(
+      `${getURL("OAUTH_PROVIDERS")}/`,
     );
   };
 
   const responseFn = async () => {
-    const { data } = await getOAuthAccountsFn();
+    const { data } = await getOAuthProvidersFn();
     return data;
   };
 
-  return query(["useGetOAuthAccountsQuery"], responseFn, { ...options });
+  return query(["useGetOAuthProvidersQuery"], responseFn, { ...options });
 };

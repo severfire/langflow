@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from langflow.services.database.models.file.model import File
     from langflow.services.database.models.flow.model import Flow
     from langflow.services.database.models.folder.model import Folder
-    from langflow.services.database.models.oauth_account.model import OAuthAccount
+    from langflow.services.database.models.oauth_provider.model import OAuthAccount
     from langflow.services.database.models.variable.model import Variable
 
 
@@ -65,7 +65,7 @@ class User(SQLModel, table=True):  # type: ignore[call-arg]
         back_populates="user",
         sa_relationship_kwargs={"cascade": "delete"},
     )
-    oauth_accounts: list["OAuthAccount"] = Relationship(
+    oauth_providers: list["OAuthAccount"] = Relationship(
         back_populates="user",
         sa_relationship_kwargs={"cascade": "delete"},
     )

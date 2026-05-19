@@ -2,28 +2,28 @@ import type { RowClickedEvent, SelectionChangedEvent } from "ag-grid-community";
 import { useCallback, useState } from "react";
 import TableComponent from "@/components/core/parameterRenderComponent/components/tableComponent";
 import {
-  type IOAuthAccountRead,
-  useDeleteOAuthAccount,
-  useGetOAuthAccountsQuery,
-} from "@/controllers/API/queries/oauth-accounts";
+  type IOAuthProviderRead,
+  useDeleteOAuthProvider,
+  useGetOAuthProvidersQuery,
+} from "@/controllers/API/queries/oauth-providers";
 import useAlertStore from "@/stores/alertStore";
-import AddOAuthAccountModal from "./components/AddOAuthAccountModal";
-import OAuthAccountHeader from "./components/OAuthAccountHeader";
+import AddOAuthProviderModal from "./components/AddOAuthProviderModal";
+import OAuthProviderHeader from "./components/OAuthProviderHeader";
 import { getColumnDefs } from "./helpers/column-defs";
 
-export default function OAuthAccountsPage() {
+export default function OAuthProvidersPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAccount, setEditingAccount] =
-    useState<IOAuthAccountRead | null>(null);
+    useState<IOAuthProviderRead | null>(null);
 
   const setSuccessData = useAlertStore((state) => state.setSuccessData);
   const setErrorData = useAlertStore((state) => state.setErrorData);
 
-  const { data, refetch } = useGetOAuthAccountsQuery();
-  const accounts: IOAuthAccountRead[] = data?.accounts ?? [];
+  const { data, refetch } = useGetOAuthProvidersQuery();
+  const accounts: IOAuthProviderRead[] = data?.accounts ?? [];
 
-  const { mutate: deleteAccount } = useDeleteOAuthAccount();
+  const { mutate: deleteAccount } = useDeleteOAuthProvider();
 
   const handleDelete = useCallback(() => {
     selectedRows.forEach((id) => {
@@ -36,14 +36,14 @@ export default function OAuthAccountsPage() {
               setSuccessData({
                 title:
                   selectedRows.length === 1
-                    ? "OAuth account deleted"
-                    : "OAuth accounts deleted",
+                    ? "OAuth provider deleted"
+                    : "OAuth providers deleted",
               });
             }
           },
           onError: (err: unknown) => {
             setErrorData({
-              title: "Failed to delete OAuth account",
+              title: "Failed to delete OAuth provider",
               list: [
                 (
                   err as {
@@ -63,7 +63,7 @@ export default function OAuthAccountsPage() {
 
   return (
     <div className="flex h-full w-full flex-col justify-between gap-6">
-      <OAuthAccountHeader
+      <OAuthProviderHeader
         selectedRows={selectedRows}
         onAdd={() => setShowAddModal(true)}
         onDelete={handleDelete}
@@ -71,17 +71,17 @@ export default function OAuthAccountsPage() {
 
       <div className="flex h-full w-full flex-col justify-between">
         <TableComponent
-          key="oauthAccounts"
+          key="oauthProviders"
           onDelete={handleDelete}
-          overlayNoRowsTemplate="No OAuth accounts configured yet"
+          overlayNoRowsTemplate="No OAuth providers configured yet"
           onSelectionChanged={(event: SelectionChangedEvent) => {
             setSelectedRows(
               event.api
                 .getSelectedRows()
-                .map((row: IOAuthAccountRead) => row.id),
+                .map((row: IOAuthProviderRead) => row.id),
             );
           }}
-          onRowClicked={(event: RowClickedEvent<IOAuthAccountRead>) => {
+          onRowClicked={(event: RowClickedEvent<IOAuthProviderRead>) => {
             if (event.data) setEditingAccount(event.data);
           }}
           rowSelection="multiple"
@@ -93,7 +93,7 @@ export default function OAuthAccountsPage() {
       </div>
 
       {showAddModal && (
-        <AddOAuthAccountModal
+        <AddOAuthProviderModal
           open={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
@@ -103,7 +103,7 @@ export default function OAuthAccountsPage() {
       )}
 
       {editingAccount && (
-        <AddOAuthAccountModal
+        <AddOAuthProviderModal
           open={editingAccount !== null}
           onClose={() => setEditingAccount(null)}
           onSuccess={() => {

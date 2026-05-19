@@ -1,16 +1,16 @@
 """OAuth Account management endpoints.
 
 Endpoints:
-  GET    /api/v1/oauth_accounts/                   - list accounts
-  POST   /api/v1/oauth_accounts/                   - create account
-  GET    /api/v1/oauth_accounts/providers          - list supported providers
-  GET    /api/v1/oauth_accounts/callback           - OAuth2 authorization code callback (browser redirect)
-  GET    /api/v1/oauth_accounts/{id}               - get single account
-  PATCH  /api/v1/oauth_accounts/{id}               - update account
-  DELETE /api/v1/oauth_accounts/{id}               - delete account
-  GET    /api/v1/oauth_accounts/{id}/authorize     - start authorization_code flow
-  POST   /api/v1/oauth_accounts/{id}/validate      - test connection
-  POST   /api/v1/oauth_accounts/{id}/rotate        - force token refresh
+  GET    /api/v1/oauth_providers/                   - list accounts
+  POST   /api/v1/oauth_providers/                   - create account
+  GET    /api/v1/oauth_providers/providers          - list supported providers
+  GET    /api/v1/oauth_providers/callback           - OAuth2 authorization code callback (browser redirect)
+  GET    /api/v1/oauth_providers/{id}               - get single account
+  PATCH  /api/v1/oauth_providers/{id}               - update account
+  DELETE /api/v1/oauth_providers/{id}               - delete account
+  GET    /api/v1/oauth_providers/{id}/authorize     - start authorization_code flow
+  POST   /api/v1/oauth_providers/{id}/validate      - test connection
+  POST   /api/v1/oauth_providers/{id}/rotate        - force token refresh
 """
 
 from __future__ import annotations
@@ -22,18 +22,18 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 
 from langflow.api.utils import CurrentActiveUser, DbSession
-from langflow.services.database.models.oauth_account.model import (
-    OAuthAccountCreate,
-    OAuthAccountRead,
-    OAuthAccountsListResponse,
-    OAuthAccountUpdate,
+from langflow.services.database.models.oauth_provider.model import (
+    OAuthProviderCreate,
+    OAuthProviderRead,
+    OAuthProvidersListResponse,
+    OAuthProviderUpdate,
     RotateTokensResponse,
     ValidateConnectionResponse,
 )
-from langflow.services.oauth_accounts.providers import list_providers
-from langflow.services.oauth_accounts.service import get_oauth_account_service
+from langflow.services.oauth_providers.providers import list_providers
+from langflow.services.oauth_providers.service import get_oauth_provider_service
 
-router = APIRouter(tags=["OAuthAccounts"], prefix="/oauth_accounts")
+router = APIRouter(tags=["OAuthProviders"], prefix="/oauth_providers")
 
 # ---------------------------------------------------------------------------
 # HTML templates for the popup callback page
@@ -230,23 +230,23 @@ async def get_providers() -> list[dict]:
 
 
 @router.get("/", include_in_schema=True)
-async def list_oauth_accounts_route(
+async def list_oauth_providers_route(
     db: DbSession,
     current_user: CurrentActiveUser,
-) -> OAuthAccountsListResponse:
-    svc = get_oauth_account_service()
+) -> OAuthProvidersListResponse:
+    svc = get_oauth_provider_service()
     accounts = await svc.list_accounts(db, current_user.id)
-    return OAuthAccountsListResponse(total_count=len(accounts), accounts=accounts)
+    return OAuthProvidersListResponse(total_count=len(accounts), accounts=accounts)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, include_in_schema=True)
-async def create_oauth_account_route(
-    payload: OAuthAccountCreate,
+async def create_oauth_provider_route(
+    payload: OAuthProviderCreate,
     db: DbSession,
     current_user: CurrentActiveUser,
-) -> OAuthAccountRead:
+) -> OAuthProviderRead:
     try:
-        svc = get_oauth_account_service()
+        svc = get_oauth_provider_service()
         return await svc.create_account(db, current_user.id, payload)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -288,10 +288,10 @@ async def oauth_callback_route(
             status_code=200,
         )
 
-    redirect_uri = str(request.base_url).rstrip("/") + "/api/v1/oauth_accounts/callback"
+    redirect_uri = str(request.base_url).rstrip("/") + "/api/v1/oauth_providers/callback"
 
     try:
-        svc = get_oauth_account_service()
+        svc = get_oauth_provider_service()
         await svc.complete_authorization_flow(db, code=code, state=state, redirect_uri=redirect_uri)
         return HTMLResponse(content=_CALLBACK_SUCCESS_HTML.format(), status_code=200)
     except Exception as exc:  # noqa: BLE001
@@ -309,69 +309,69 @@ async def oauth_callback_route(
 
 
 @router.get("/{account_id}", include_in_schema=True)
-async def get_oauth_account_route(
+async def get_oauth_provider_route(
     account_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
-) -> OAuthAccountRead:
-    from langflow.services.database.models.oauth_account.crud import get_oauth_account
-    from langflow.services.database.models.oauth_account.model import OAuthAccountRead
+) -> OAuthProviderRead:
+    from langflow.services.database.models.oauth_provider.crud import get_oauth_provider
+    from langflow.services.database.models.oauth_provider.model import OAuthProviderRead
 
-    account = await get_oauth_account(db, account_id, current_user.id)
+    account = await get_oauth_provider(db, account_id, current_user.id)
     if account is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth account not found")
-    return OAuthAccountRead.from_orm(account)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth provider not found")
+    return OAuthProviderRead.from_orm(account)
 
 
 @router.patch("/{account_id}", include_in_schema=True)
-async def update_oauth_account_route(
+async def update_oauth_provider_route(
     account_id: UUID,
-    payload: OAuthAccountUpdate,
+    payload: OAuthProviderUpdate,
     db: DbSession,
     current_user: CurrentActiveUser,
-) -> OAuthAccountRead:
-    svc = get_oauth_account_service()
+) -> OAuthProviderRead:
+    svc = get_oauth_provider_service()
     result = await svc.update_account(db, current_user.id, account_id, payload)
     if result is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth account not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="OAuth provider not found")
     return result
 
 
 @router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=True)
-async def delete_oauth_account_route(
+async def delete_oauth_provider_route(
     account_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> None:
     try:
-        svc = get_oauth_account_service()
+        svc = get_oauth_provider_service()
         await svc.delete_account(db, current_user.id, account_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 @router.post("/{account_id}/validate", include_in_schema=True)
-async def validate_oauth_account_route(
+async def validate_oauth_provider_route(
     account_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> ValidateConnectionResponse:
-    svc = get_oauth_account_service()
+    svc = get_oauth_provider_service()
     return await svc.validate_connection(db, current_user.id, account_id)
 
 
 @router.post("/{account_id}/rotate", include_in_schema=True)
-async def rotate_oauth_account_tokens_route(
+async def rotate_oauth_provider_tokens_route(
     account_id: UUID,
     db: DbSession,
     current_user: CurrentActiveUser,
 ) -> RotateTokensResponse:
-    svc = get_oauth_account_service()
+    svc = get_oauth_provider_service()
     return await svc.rotate_tokens(db, current_user.id, account_id)
 
 
 @router.get("/{account_id}/authorize", include_in_schema=True)
-async def authorize_oauth_account_route(
+async def authorize_oauth_provider_route(
     account_id: UUID,
     request: Request,
     db: DbSession,
@@ -381,11 +381,11 @@ async def authorize_oauth_account_route(
 
     The frontend should open this URL in a popup window.  When the user
     completes the consent screen, Google (or another provider) will redirect
-    to ``/api/v1/oauth_accounts/callback`` which exchanges the code for tokens.
+    to ``/api/v1/oauth_providers/callback`` which exchanges the code for tokens.
     """
-    redirect_uri = str(request.base_url).rstrip("/") + "/api/v1/oauth_accounts/callback"
+    redirect_uri = str(request.base_url).rstrip("/") + "/api/v1/oauth_providers/callback"
     try:
-        svc = get_oauth_account_service()
+        svc = get_oauth_provider_service()
         return await svc.start_authorization_flow(db, current_user.id, account_id, redirect_uri)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

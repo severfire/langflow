@@ -44,7 +44,7 @@ export const URLs = {
   AGENTIC_ASSIST: `agentic/assist`,
   AGENTIC_ASSIST_STREAM: `agentic/assist/stream`,
   AGENTIC_CHECK_CONFIG: `agentic/check-config`,
-  OAUTH_ACCOUNTS: `oauth_accounts`,
+  OAUTH_PROVIDERS: `oauth_providers`,
 } as const;
 
 // IMPORTANT: FOLDERS endpoint now points to 'projects' for backward compatibility

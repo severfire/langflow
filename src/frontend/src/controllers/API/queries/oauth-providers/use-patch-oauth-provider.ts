@@ -2,9 +2,9 @@ import type { useMutationFunctionType } from "@/types/api";
 import { api } from "../../api";
 import { getURL } from "../../helpers/constants";
 import { UseRequestProcessor } from "../../services/request-processor";
-import type { IOAuthAccountRead } from "./use-get-oauth-accounts";
+import type { IOAuthProviderRead } from "./use-get-oauth-providers";
 
-export interface IOAuthAccountUpdate {
+export interface IOAuthProviderUpdate {
   name?: string | null;
   client_id?: string | null;
   client_secret?: string | null;
@@ -17,26 +17,26 @@ export interface IOAuthAccountUpdate {
   auto_refresh_interval_minutes?: number | null;
 }
 
-interface IPatchOAuthAccount {
+interface IPatchOAuthProvider {
   accountId: string;
-  payload: IOAuthAccountUpdate;
+  payload: IOAuthProviderUpdate;
 }
 
-export const usePatchOAuthAccount: useMutationFunctionType<
+export const usePatchOAuthProvider: useMutationFunctionType<
   undefined,
-  IPatchOAuthAccount
+  IPatchOAuthProvider
 > = (options) => {
   const { mutate } = UseRequestProcessor();
 
-  const patchOAuthAccountFn = async (
-    payload: IPatchOAuthAccount,
-  ): Promise<IOAuthAccountRead> => {
-    const res = await api.patch<IOAuthAccountRead>(
-      `${getURL("OAUTH_ACCOUNTS")}/${payload.accountId}`,
+  const patchOAuthProviderFn = async (
+    payload: IPatchOAuthProvider,
+  ): Promise<IOAuthProviderRead> => {
+    const res = await api.patch<IOAuthProviderRead>(
+      `${getURL("OAUTH_PROVIDERS")}/${payload.accountId}`,
       payload.payload,
     );
     return res.data;
   };
 
-  return mutate(["usePatchOAuthAccount"], patchOAuthAccountFn, options);
+  return mutate(["usePatchOAuthProvider"], patchOAuthProviderFn, options);
 };

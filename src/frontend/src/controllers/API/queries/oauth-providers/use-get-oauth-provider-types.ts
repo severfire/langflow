@@ -16,7 +16,7 @@ export interface IOAuthProvider {
   hints: Record<string, string>;
 }
 
-export const useGetOAuthProvidersQuery: useQueryFunctionType<
+export const useGetOAuthProviderTypesQuery: useQueryFunctionType<
   undefined,
   IOAuthProvider[]
 > = (options) => {
@@ -24,7 +24,7 @@ export const useGetOAuthProvidersQuery: useQueryFunctionType<
 
   const getProvidersFn = async () => {
     return await api.get<IOAuthProvider[]>(
-      `${getURL("OAUTH_ACCOUNTS")}/providers`,
+      `${getURL("OAUTH_PROVIDERS")}/providers`,
     );
   };
 
@@ -33,7 +33,7 @@ export const useGetOAuthProvidersQuery: useQueryFunctionType<
     return data;
   };
 
-  return query(["useGetOAuthProvidersQuery"], responseFn, {
+  return query(["useGetOAuthProviderTypesQuery"], responseFn, {
     staleTime: Infinity,
     ...options,
   });

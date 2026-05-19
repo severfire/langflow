@@ -7,26 +7,27 @@ export interface IRotateTokensResponse {
   success: boolean;
   message: string;
   token_expires_at?: string | null;
+  synced_global_variables?: string[];
 }
 
-interface IRotateOAuthAccount {
+interface IRotateOAuthProvider {
   accountId: string;
 }
 
-export const useRotateOAuthAccount: useMutationFunctionType<
+export const useRotateOAuthProvider: useMutationFunctionType<
   undefined,
-  IRotateOAuthAccount
+  IRotateOAuthProvider
 > = (options) => {
   const { mutate } = UseRequestProcessor();
 
-  const rotateOAuthAccountFn = async (
-    payload: IRotateOAuthAccount,
+  const rotateOAuthProviderFn = async (
+    payload: IRotateOAuthProvider,
   ): Promise<IRotateTokensResponse> => {
     const res = await api.post<IRotateTokensResponse>(
-      `${getURL("OAUTH_ACCOUNTS")}/${payload.accountId}/rotate`,
+      `${getURL("OAUTH_PROVIDERS")}/${payload.accountId}/rotate`,
     );
     return res.data;
   };
 
-  return mutate(["useRotateOAuthAccount"], rotateOAuthAccountFn, options);
+  return mutate(["useRotateOAuthProvider"], rotateOAuthProviderFn, options);
 };

@@ -46,7 +46,7 @@ class OAuthTokenStatus(str, Enum):
 
 
 class OAuthAccount(SQLModel, table=True):  # type: ignore[call-arg]
-    __tablename__ = "oauth_account"
+    __tablename__ = "oauth_provider"
 
     id: UUIDstr = Field(default_factory=uuid4, primary_key=True, unique=True)
     user_id: UUIDstr = Field(index=True, foreign_key="user.id")
@@ -90,7 +90,7 @@ class OAuthAccount(SQLModel, table=True):  # type: ignore[call-arg]
 
     auto_refresh_interval_minutes: int | None = Field(default=None, nullable=True)
 
-    user: "User" = Relationship(back_populates="oauth_accounts")
+    user: "User" = Relationship(back_populates="oauth_providers")
 
     @property
     def token_status(self) -> OAuthTokenStatus:
@@ -109,7 +109,7 @@ class OAuthAccount(SQLModel, table=True):  # type: ignore[call-arg]
 # ---------------------------------------------------------------------------
 
 
-class OAuthAccountCreate(SQLModel):
+class OAuthProviderCreate(SQLModel):
     name: str
     provider: str
     flow_type: str = OAuthFlowType.client_credentials
@@ -123,7 +123,7 @@ class OAuthAccountCreate(SQLModel):
     extra_data: str | None = None
 
 
-class OAuthAccountUpdate(SQLModel):
+class OAuthProviderUpdate(SQLModel):
     name: str | None = None
     client_id: str | None = None
     client_secret: str | None = None
@@ -136,7 +136,7 @@ class OAuthAccountUpdate(SQLModel):
     auto_refresh_interval_minutes: int | None = None
 
 
-class OAuthAccountRead(SQLModel):
+class OAuthProviderRead(SQLModel):
     id: UUIDstr
     user_id: UUIDstr
     name: str
@@ -158,7 +158,7 @@ class OAuthAccountRead(SQLModel):
     next_refresh_at: datetime | None = None
 
     @classmethod
-    def from_orm(cls, account: OAuthAccount) -> "OAuthAccountRead":
+    def from_orm(cls, account: OAuthAccount) -> "OAuthProviderRead":
         cid = account.client_id
         _mask_visible_chars = 4
         masked = (
@@ -195,9 +195,9 @@ class OAuthAccountRead(SQLModel):
         )
 
 
-class OAuthAccountsListResponse(SQLModel):
+class OAuthProvidersListResponse(SQLModel):
     total_count: int
-    accounts: list[OAuthAccountRead]
+    accounts: list[OAuthProviderRead]
 
 
 class ValidateConnectionResponse(SQLModel):
@@ -210,3 +210,4 @@ class RotateTokensResponse(SQLModel):
     success: bool
     message: str
     token_expires_at: datetime | None = None
+    synced_global_variables: list[str] = Field(default_factory=list)
