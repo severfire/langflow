@@ -281,6 +281,31 @@ class DBProviderInput(BaseInputMixin, InputTraceMixin, ToolModeMixin):
     input_types: list[str] = Field(default_factory=list)
 
 
+class OAuthProviderInput(BaseInputMixin, MetadataTraceMixin, ToolModeMixin):
+    """Represents an OAuth provider selector input.
+
+    The stored value is the UUID string of the selected OAuth provider account.
+    The frontend renders a dropdown populated from the user's configured OAuth
+    providers. An optional ``provider_filter`` restricts which providers appear
+    (e.g. ``["google"]`` shows only Google accounts).
+
+    At build time the component receives the raw UUID string. Call
+    ``self.get_oauth_provider_token(value)`` or
+    ``self.get_oauth_provider_info(value)`` to exchange it for live
+    credentials.
+    """
+
+    field_type: SerializableFieldTypes = FieldTypes.OAUTH_PROVIDER
+    value: str = ""
+    placeholder: str | None = "Select OAuth Provider"
+    input_types: list[str] = Field(default_factory=list)
+    refresh_button: bool | None = True
+    provider_filter: list[str] = Field(default_factory=list)
+    """Restrict the dropdown to specific provider types, e.g. ['google', 'microsoft'].
+    Empty list means all configured providers are shown."""
+    track_in_telemetry: CoalesceBool = False
+
+
 # Applying mixins to a specific input type
 class StrInput(
     BaseInputMixin,
@@ -1014,6 +1039,7 @@ InputTypes: TypeAlias = (
     | MultilineInput
     | MultilineSecretInput
     | NestedDictInput
+    | OAuthProviderInput
     | ToolsInput
     | PromptInput
     | MustachePromptInput

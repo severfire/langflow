@@ -699,6 +699,9 @@ export const LANGFLOW_SUPPORTED_TYPES = new Set([
   "query",
   "mcp",
   "tools",
+  "model",
+  "knowledge_backend",
+  "oauth_provider",
 ]);
 
 export const FLEX_VIEW_TYPES = ["bool"];

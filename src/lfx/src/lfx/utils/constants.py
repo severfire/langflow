@@ -84,6 +84,7 @@ DIRECT_TYPES = [
     "tools",
     "mcp",
     "model",
+    "oauth_provider",
 ]
 
 

@@ -2,6 +2,7 @@ import type { handleOnNewValueType } from "@/CustomNodes/hooks/use-handle-new-va
 import CodeAreaComponent from "@/components/core/parameterRenderComponent/components/codeAreaComponent";
 import DBProviderInputComponent from "@/components/core/parameterRenderComponent/components/dbProviderInputComponent";
 import ModelInputComponent from "@/components/core/parameterRenderComponent/components/modelInputComponent";
+import OAuthProviderInputComponent from "@/components/core/parameterRenderComponent/components/oauthProviderInputComponent";
 import SliderComponent from "@/components/core/parameterRenderComponent/components/sliderComponent";
 import TableNodeComponent from "@/components/core/parameterRenderComponent/components/TableNodeComponent";
 import TabComponent from "@/components/core/parameterRenderComponent/components/tabComponent";
@@ -344,6 +345,15 @@ export function ParameterRenderComponent({
           <DBProviderInputComponent
             {...baseInputProps}
             id={`dbprovider_${id}`}
+          />
+        );
+      case "oauth_provider":
+        return (
+          <OAuthProviderInputComponent
+            {...baseInputProps}
+            id={`oauthprovider_${id}`}
+            providerFilter={templateData?.provider_filter}
+            placeholder={templateData?.placeholder}
           />
         );
       default:

@@ -504,6 +504,91 @@ class CustomComponent(BaseComponent):
         async with session_scope() as session:
             return await variable_service.list_variables(user_id=self.user_id, session=session)
 
+    def get_oauth_provider_token(self, provider_id: str) -> str | None:
+        """Return a valid access token for the given OAuth provider account ID.
+
+        Args:
+            provider_id: UUID string of the OAuth provider account.
+
+        Returns:
+            The access token string, or ``None`` if unavailable.
+        """
+        return run_until_complete(self._async_get_oauth_provider_token(provider_id))
+
+    async def _async_get_oauth_provider_token(self, provider_id: str) -> str | None:
+        if not provider_id:
+            return None
+        try:
+            import uuid as _uuid
+
+            from langflow.services.oauth_providers.service import OAuthProviderService
+
+            service = OAuthProviderService()
+            user_id = _uuid.UUID(str(self.user_id))
+            account_id = _uuid.UUID(provider_id)
+            async with session_scope() as session:
+                return await service.get_valid_token(session, user_id, account_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not get OAuth token for provider %s", provider_id)
+            return None
+
+    def get_oauth_provider_info(self, provider_id: str) -> dict | None:
+        """Return a plain-dict snapshot of an OAuth provider account.
+
+        The dict contains:
+        - ``flow_type``: the OAuth grant type (e.g. ``"service_account"``)
+        - ``access_token``: a valid access token (may be ``None`` for api_key flows)
+        - ``extra_data``: parsed JSON dict for service-account providers, else ``None``
+        - ``name``: the human-readable account name
+        - ``provider``: the provider slug (e.g. ``"google"``)
+
+        Args:
+            provider_id: UUID string of the OAuth provider account.
+
+        Returns:
+            A dict with the account snapshot, or ``None`` if not found.
+        """
+        return run_until_complete(self._async_get_oauth_provider_info(provider_id))
+
+    async def _async_get_oauth_provider_info(self, provider_id: str) -> dict | None:
+        if not provider_id:
+            return None
+        try:
+            import json as _json
+            import uuid as _uuid
+
+            from langflow.services.database.models.oauth_provider.crud import (
+                decrypt_extra_data,
+                get_oauth_provider,
+            )
+            from langflow.services.oauth_providers.service import OAuthProviderService
+
+            service = OAuthProviderService()
+            user_id = _uuid.UUID(str(self.user_id))
+            account_id = _uuid.UUID(provider_id)
+            async with session_scope() as session:
+                account = await get_oauth_provider(session, account_id, user_id)
+                if account is None:
+                    return None
+                access_token = await service.get_valid_token(session, user_id, account_id)
+                extra_data_str = decrypt_extra_data(account)
+                extra_data: dict | str | None = None
+                if extra_data_str:
+                    try:
+                        extra_data = _json.loads(extra_data_str)
+                    except Exception:  # noqa: BLE001
+                        extra_data = extra_data_str
+                return {
+                    "flow_type": account.flow_type,
+                    "access_token": access_token,
+                    "extra_data": extra_data,
+                    "name": account.name,
+                    "provider": account.provider,
+                }
+        except Exception:  # noqa: BLE001
+            logger.warning("Could not get OAuth provider info for %s", provider_id)
+            return None
+
     def index(self, value: int = 0):
         """Returns a function that returns the value at the given index in the iterable.
 
